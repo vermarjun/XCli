@@ -36,9 +36,9 @@ def test_feed_returns_valid_json_with_posts() -> None:
         pytest.fail(f"xcli feed did not produce valid JSON: {exc}\nOutput: {result.output}")
 
     posts = data.get("posts", [])
-    assert (
-        len(posts) == 3
-    ), f"Expected 3 posts, got {len(posts)}. count_captured={data.get('count_captured')}"
+    assert len(posts) == 3, (
+        f"Expected 3 posts, got {len(posts)}. count_captured={data.get('count_captured')}"
+    )
 
 
 def test_feed_post_structure() -> None:
@@ -57,9 +57,9 @@ def test_feed_post_structure() -> None:
         has_media = bool(post.get("media"))
         assert has_text or has_media, f"Post[{i}] (id={post.get('id')}) has neither text nor media"
         metrics = post.get("metrics", {})
-        assert (
-            metrics.get("likes", -1) >= 0
-        ), f"Post[{i}] metrics.likes must be >= 0, got {metrics.get('likes')}"
+        assert metrics.get("likes", -1) >= 0, (
+            f"Post[{i}] metrics.likes must be >= 0, got {metrics.get('likes')}"
+        )
 
 
 def test_feed_has_comment_or_partial_flag() -> None:
@@ -74,6 +74,6 @@ def test_feed_has_comment_or_partial_flag() -> None:
     has_comment_or_partial = any(
         len(p.get("comments", [])) >= 1 or p.get("comments_partial") for p in posts
     )
-    assert (
-        has_comment_or_partial
-    ), "Expected at least one post to have a comment or comments_partial=True"
+    assert has_comment_or_partial, (
+        "Expected at least one post to have a comment or comments_partial=True"
+    )

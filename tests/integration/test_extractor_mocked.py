@@ -355,9 +355,9 @@ async def test_fetch_thread_comments_respects_discover_boundary(browser, fixture
     # The fixture has 5 real replies (200–204). The placeholder is filtered.
     # Requesting y=10 must NOT return more than 5, because the boundary stops
     # collection before the 2 recommendation tweets.
-    assert (
-        len(comments) == 5
-    ), f"Expected exactly 5 real replies, got {len(comments)}: {[c['id'] for c in comments]}"
+    assert len(comments) == 5, (
+        f"Expected exactly 5 real replies, got {len(comments)}: {[c['id'] for c in comments]}"
+    )
 
     # --- id / author assertions ---
     comment_ids = {c["id"] for c in comments}

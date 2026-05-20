@@ -73,9 +73,9 @@ from xcli.scraping.parsing import (
 )
 def test_parse_metric_count(input_str: str | None, expected: int | None) -> None:
     result = parse_metric_count(input_str)
-    assert (
-        result == expected
-    ), f"parse_metric_count({input_str!r}) → {result!r}, expected {expected!r}"
+    assert result == expected, (
+        f"parse_metric_count({input_str!r}) → {result!r}, expected {expected!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +111,9 @@ def test_parse_metric_count(input_str: str | None, expected: int | None) -> None
 )
 def test_parse_post_id_from_href(href: str | None, expected: str | None) -> None:
     result = parse_post_id_from_href(href)
-    assert (
-        result == expected
-    ), f"parse_post_id_from_href({href!r}) → {result!r}, expected {expected!r}"
+    assert result == expected, (
+        f"parse_post_id_from_href({href!r}) → {result!r}, expected {expected!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -139,9 +139,9 @@ def test_parse_post_id_from_href(href: str | None, expected: str | None) -> None
 )
 def test_parse_username_from_avatar_testid(testid: str | None, expected: str | None) -> None:
     result = parse_username_from_avatar_testid(testid)
-    assert (
-        result == expected
-    ), f"parse_username_from_avatar_testid({testid!r}) → {result!r}, expected {expected!r}"
+    assert result == expected, (
+        f"parse_username_from_avatar_testid({testid!r}) → {result!r}, expected {expected!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -170,9 +170,9 @@ def test_parse_username_from_avatar_testid(testid: str | None, expected: str | N
 )
 def test_parse_username_from_status_href(href: str | None, expected: str | None) -> None:
     result = parse_username_from_status_href(href)
-    assert (
-        result == expected
-    ), f"parse_username_from_status_href({href!r}) → {result!r}, expected {expected!r}"
+    assert result == expected, (
+        f"parse_username_from_status_href({href!r}) → {result!r}, expected {expected!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +226,9 @@ def test_parse_join_date(input_str: str | None, expected: str | None) -> None:
 )
 def test_parse_iso_datetime(input_str: str | None, expected: str | None) -> None:
     result = parse_iso_datetime(input_str)
-    assert (
-        result == expected
-    ), f"parse_iso_datetime({input_str!r}) → {result!r}, expected {expected!r}"
+    assert result == expected, (
+        f"parse_iso_datetime({input_str!r}) → {result!r}, expected {expected!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -352,9 +352,9 @@ def test_extract_links_empty_input() -> None:
 )
 def test_parse_human_timestamp(input_str: str | None, expected: str | None) -> None:
     result = parse_human_timestamp(input_str)
-    assert (
-        result == expected
-    ), f"parse_human_timestamp({input_str!r}) → {result!r}, expected {expected!r}"
+    assert result == expected, (
+        f"parse_human_timestamp({input_str!r}) → {result!r}, expected {expected!r}"
+    )
 
 
 def test_extract_links_multiple_unique() -> None:

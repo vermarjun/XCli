@@ -59,9 +59,9 @@ class TestParseSannysoftRowsHappyPath:
         per_row = [r for r in results if r.name != "sannysoft_summary"]
         assert len(per_row) == 6
         for r in per_row:
-            assert (
-                r.status == CheckStatus.PASS
-            ), f"Expected PASS for {r.name!r} but got {r.status!r}: {r.detail}"
+            assert r.status == CheckStatus.PASS, (
+                f"Expected PASS for {r.name!r} but got {r.status!r}: {r.detail}"
+            )
 
     def test_summary_appended(self):
         rows = _make_rows(("WebDriver (New)", "passed", ""))

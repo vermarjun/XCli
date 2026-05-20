@@ -15,6 +15,7 @@ Coverage targets:
 from __future__ import annotations
 
 import json
+import re
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,6 +24,16 @@ from typer.testing import CliRunner
 from xcli.cli import app
 
 runner = CliRunner()
+
+
+# Strip ANSI escape codes — Typer/Rich wrap long lines on narrow CI terminals,
+# splitting option names ("--headless") across `\x1b[...]m...\x1b[0m` boundaries.
+# Local macOS doesn't wrap so the substring matches, but CI does. Strip first.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(s: str) -> str:
+    return _ANSI_RE.sub("", s)
 
 
 # ---------------------------------------------------------------------------
@@ -299,14 +310,15 @@ class TestFeedCommand:
         """--help for feed should show --headless (not --no-headless)."""
         result = runner.invoke(app, ["feed", "--help"])
         assert result.exit_code == 0
-        assert "--headless" in result.output
-        assert "--no-headless" not in result.output
+        plain = _plain(result.output)
+        assert "--headless" in plain
+        assert "--no-headless" not in plain
 
     def test_feed_help_shows_channel_flag(self):
         """--help for feed should show --channel."""
         result = runner.invoke(app, ["feed", "--help"])
         assert result.exit_code == 0
-        assert "--channel" in result.output
+        assert "--channel" in _plain(result.output)
 
     def test_feed_headless_flag_passes_true(self):
         """--headless flag should pass headless=True to _feed_cmd."""
@@ -472,14 +484,15 @@ class TestProfileCommand:
         """--help for profile should show --headless (not --no-headless)."""
         result = runner.invoke(app, ["profile", "--help"])
         assert result.exit_code == 0
-        assert "--headless" in result.output
-        assert "--no-headless" not in result.output
+        plain = _plain(result.output)
+        assert "--headless" in plain
+        assert "--no-headless" not in plain
 
     def test_profile_help_shows_channel_flag(self):
         """--help for profile should show --channel."""
         result = runner.invoke(app, ["profile", "--help"])
         assert result.exit_code == 0
-        assert "--channel" in result.output
+        assert "--channel" in _plain(result.output)
 
     def test_profile_default_is_headful(self):
         """Without --headless, profile should pass headless=False (visible default)."""
@@ -561,11 +574,12 @@ class TestDoctorCommand:
         """--help for doctor should show --channel."""
         result = runner.invoke(app, ["doctor", "--help"])
         assert result.exit_code == 0
-        assert "--channel" in result.output
+        assert "--channel" in _plain(result.output)
 
     def test_status_help_no_headless_no_channel(self):
         """status --help should NOT show --headless or --channel (utility command)."""
         result = runner.invoke(app, ["status", "--help"])
         assert result.exit_code == 0
-        assert "--headless" not in result.output
-        assert "--channel" not in result.output
+        plain = _plain(result.output)
+        assert "--headless" not in plain
+        assert "--channel" not in plain

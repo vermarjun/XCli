@@ -90,16 +90,16 @@ def test_tuple_constant_elements_non_empty(name: str, value: tuple) -> None:
 
 def test_tweet_article_starts_with_article() -> None:
     """TWEET_ARTICLE must start with 'article[data-testid='."""
-    assert TWEET_ARTICLE.startswith(
-        "article[data-testid="
-    ), f"TWEET_ARTICLE should start with 'article[data-testid=', got: {TWEET_ARTICLE!r}"
+    assert TWEET_ARTICLE.startswith("article[data-testid="), (
+        f"TWEET_ARTICLE should start with 'article[data-testid=', got: {TWEET_ARTICLE!r}"
+    )
 
 
 def test_primary_column_starts_with_data_testid() -> None:
     """PRIMARY_COLUMN must start with '[data-testid='."""
-    assert PRIMARY_COLUMN.startswith(
-        "[data-testid="
-    ), f"PRIMARY_COLUMN should start with '[data-testid=', got: {PRIMARY_COLUMN!r}"
+    assert PRIMARY_COLUMN.startswith("[data-testid="), (
+        f"PRIMARY_COLUMN should start with '[data-testid=', got: {PRIMARY_COLUMN!r}"
+    )
 
 
 def test_logged_in_nav_contains_SideNav() -> None:
@@ -146,9 +146,9 @@ def test_no_class_name_selectors_in_string_constants() -> None:
         if "[" not in value and not value.startswith("."):
             continue
         # The value must not start with a class selector
-        assert not value.strip().startswith(
-            "."
-        ), f"{name}={value!r} appears to be a CSS class selector — not allowed"
+        assert not value.strip().startswith("."), (
+            f"{name}={value!r} appears to be a CSS class selector — not allowed"
+        )
 
 
 def test_ad_text_labels_is_dict_with_en() -> None:
