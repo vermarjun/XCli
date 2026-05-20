@@ -182,3 +182,144 @@ async def test_soft_block_during_feed(browser, fixture_server) -> None:
     extractor = XExtractor(page)
     with pytest.raises(RateLimitError):
         await extractor.fetch_feed(count=3, comments_per=0)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: research_profile tests
+# ---------------------------------------------------------------------------
+
+
+async def test_research_profile_normal(browser, fixture_server) -> None:
+    """research_profile returns valid schema for a normal profile page."""
+    page = browser.page
+
+    # Route profile page and comment fetches
+    await _route_fixture(page, "**/elonmusk", "profile_normal.html")
+    await _route_fixture(page, "**/status/**", "tweet_thread.html")
+
+    extractor = XExtractor(page)
+    result = await extractor.research_profile("elonmusk", posts=2, comments_per=1)
+
+    # Top-level schema
+    assert "captured_at" in result
+    assert result["username"] == "elonmusk"
+    assert "profile" in result
+    assert "posts" in result
+    assert "warnings" in result
+    assert isinstance(result["posts"], list)
+    assert len(result["posts"]) <= 2
+
+    # Profile fields
+    prof = result["profile"]
+    assert prof["handle"] == "@elonmusk"
+    assert prof["display_name"] == "Elon Musk"
+    assert prof["verified"] is True
+    assert prof["verified_kind"] == "blue"
+    assert prof["location"] == "Austin, TX"
+    assert prof["joined"] == "Joined June 2009"
+    assert prof["joined_iso"] == "2009-06"
+    assert prof["followers_count"] == 4_500_000
+    assert prof["following_count"] == 123
+    assert len(prof["links"]) >= 1
+    assert prof["protected"] is False
+    assert prof["suspended"] is False
+    assert prof["not_found"] is False
+
+
+async def test_research_profile_normal_snapshot(browser, fixture_server) -> None:
+    """research_profile output matches committed golden snapshot (or regenerates it)."""
+    page = browser.page
+
+    await _route_fixture(page, "**/elonmusk", "profile_normal.html")
+    await _route_fixture(page, "**/status/**", "tweet_thread.html")
+
+    extractor = XExtractor(page)
+    result = await extractor.research_profile("elonmusk", posts=2, comments_per=1)
+
+    # Strip volatile fields before comparison
+    _strip_profile_volatile(result)
+
+    snapshot_path = SNAPSHOTS_DIR / "profile_normal.json"
+
+    if os.environ.get("XCLI_UPDATE_SNAPSHOTS") == "1":
+        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        snapshot_path.write_text(
+            json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        return  # Don't assert when updating
+
+    if not snapshot_path.exists():
+        pytest.skip(
+            f"Snapshot file not found at {snapshot_path}. "
+            "Run with XCLI_UPDATE_SNAPSHOTS=1 to generate it."
+        )
+
+    golden = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert result == golden, (
+        "Snapshot mismatch. Run with XCLI_UPDATE_SNAPSHOTS=1 to update."
+        f"\nGot: {json.dumps(result, indent=2, sort_keys=True)}"
+        f"\nExpected: {json.dumps(golden, indent=2, sort_keys=True)}"
+    )
+
+
+def _strip_profile_volatile(data: dict) -> None:
+    """Remove volatile fields (timestamps) from a research_profile result."""
+    data.pop("captured_at", None)
+    for post in data.get("posts") or []:
+        for comment in post.get("comments") or []:
+            comment.pop("captured_at", None)
+
+
+async def test_research_profile_suspended(browser, fixture_server) -> None:
+    """research_profile returns suspended=True and empty posts for a suspended account."""
+    page = browser.page
+
+    await _route_fixture(page, "**/suspendeduser", "profile_suspended.html")
+
+    extractor = XExtractor(page)
+    result = await extractor.research_profile("suspendeduser", posts=5, comments_per=0)
+
+    prof = result["profile"]
+    assert prof["suspended"] is True
+    assert prof["protected"] is False
+    assert prof["not_found"] is False
+    assert result["posts"] == []
+    assert len(result["warnings"]) > 0
+    assert any("suspended" in w for w in result["warnings"])
+
+
+async def test_research_profile_protected(browser, fixture_server) -> None:
+    """research_profile returns protected=True and empty posts for a protected account."""
+    page = browser.page
+
+    await _route_fixture(page, "**/protecteduser", "profile_protected.html")
+
+    extractor = XExtractor(page)
+    result = await extractor.research_profile("protecteduser", posts=5, comments_per=0)
+
+    prof = result["profile"]
+    assert prof["protected"] is True
+    assert prof["suspended"] is False
+    assert prof["not_found"] is False
+    assert result["posts"] == []
+    assert len(result["warnings"]) > 0
+    assert any("protected" in w for w in result["warnings"])
+
+
+async def test_research_profile_not_found(browser, fixture_server) -> None:
+    """research_profile returns not_found=True and empty posts for a missing account."""
+    page = browser.page
+
+    await _route_fixture(page, "**/ghostuser", "profile_not_found.html")
+
+    extractor = XExtractor(page)
+    result = await extractor.research_profile("ghostuser", posts=5, comments_per=0)
+
+    prof = result["profile"]
+    assert prof["not_found"] is True
+    assert prof["suspended"] is False
+    assert prof["protected"] is False
+    assert result["posts"] == []
+    assert len(result["warnings"]) > 0
+    assert any("not_found" in w for w in result["warnings"])

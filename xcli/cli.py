@@ -271,7 +271,7 @@ async def _feed_cmd(count: int, comments_per: int, headless: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# profile (Phase 2 stub)
+# profile
 # ---------------------------------------------------------------------------
 
 
@@ -285,10 +285,53 @@ def profile(
 ) -> None:
     """Deep-research a user's profile + their top N posts + Y comments each.
 
-    Not implemented yet (Phase 2).
+    Requires an authenticated session. Run ``xcli login`` first if needed.
+
+    Output is JSON (stdout) unless ``--output`` is specified.
+    Exit codes: 0 ok, 2 auth needed, 3 rate-limited, 4 not-found/suspended/protected, 1 other.
     """
-    console.print("[yellow]xcli profile[/yellow] is not implemented yet (Phase 2).")
-    raise typer.Exit(code=1)
+    _setup_logging()
+    try:
+        result = asyncio.run(_profile_cmd(username, posts, comments_per, not no_headless))
+        payload = json.dumps(result, indent=2, ensure_ascii=False)
+        if output:
+            output.write_text(payload + "\n", encoding="utf-8")
+            console.print(f"[green]Profile written to[/green] {output}")
+        else:
+            typer.echo(payload)
+
+        # Exit code 4 for profile-error states (not_found, suspended, protected)
+        profile_data = result.get("profile") or {}
+        if (
+            profile_data.get("not_found")
+            or profile_data.get("suspended")
+            or profile_data.get("protected")
+        ):
+            raise typer.Exit(code=4)
+
+    except typer.Exit:
+        raise
+    except AuthenticationError as e:
+        console.print(f"[red]Authentication required:[/red] {e}")
+        console.print("Run [bold]xcli login[/bold] to establish a session.")
+        raise typer.Exit(code=2) from e
+    except RateLimitError as e:
+        console.print(
+            f"[yellow]Rate limited:[/yellow] {e}  (suggested wait: {e.suggested_wait_seconds}s)"
+        )
+        raise typer.Exit(code=3) from e
+    except XCliError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=e.exit_code) from e
+    except Exception as e:
+        console.print(f"[red]Unexpected error:[/red] {e}")
+        raise typer.Exit(code=1) from e
+
+
+async def _profile_cmd(username: str, posts: int, comments_per: int, headless: bool) -> dict:
+    from xcli.tools.profile import run
+
+    return await run(username, posts, comments_per, headless=headless)
 
 
 # ---------------------------------------------------------------------------

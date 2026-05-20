@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!--
+  profile_not_found.html — X.com "account doesn't exist" page fixture.
+
+  Structural signals:
+  - empty_state_header_text data-testid present
+  - Body text contains "This account doesn't exist"
+  - No PROFILE_USER_NAME block
+  - No tweet articles
+
+  Auth: authenticated page (has SideNav)
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Profile / X</title>
+</head>
+<body>
+  <!-- Authenticated nav -->
+  <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser"></div>
+
+  <div data-testid="primaryColumn">
+    <div data-testid="empty_state_header_text">
+      This account doesn't exist
+    </div>
+    <p>Try searching for another.</p>
+  </div>
+</body>
+</html>

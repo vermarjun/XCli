@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!--
+  profile_protected.html — X.com protected account page fixture.
+
+  Structural signals:
+  - Normal UserName block is visible (you can see the profile header)
+  - Body text contains "These posts are protected" (per-locale; English v1)
+  - Zero tweet articles in the timeline (timeline is locked behind follow approval)
+
+  Auth: authenticated page (has SideNav)
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Protected User (@protecteduser) / X</title>
+</head>
+<body>
+  <!-- Authenticated nav -->
+  <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser"></div>
+
+  <div data-testid="primaryColumn">
+
+    <!-- Profile header is still visible -->
+    <div data-testid="UserName">
+      <span>Protected User</span>
+      <span>@protecteduser</span>
+    </div>
+
+    <div data-testid="UserDescription">This account's posts are protected.</div>
+    <div data-testid="UserLocation">Somewhere</div>
+    <div data-testid="UserJoinDate">Joined January 2020</div>
+    <a href="/protecteduser/followers">42 Followers</a>
+    <a href="/protecteduser/following">10 Following</a>
+
+    <!-- Protected notice — no tweet articles below -->
+    <div role="heading">These posts are protected</div>
+    <p>
+      Only approved followers can see @protecteduser's posts.
+      To request access, tap Follow.
+    </p>
+
+    <!-- Intentionally no article[data-testid="tweet"] elements -->
+
+  </div><!-- /primaryColumn -->
+</body>
+</html>

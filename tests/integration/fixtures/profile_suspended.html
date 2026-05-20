@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!--
+  profile_suspended.html — X.com suspended account page fixture.
+
+  Structural signals:
+  - Title contains "Account suspended / X"
+  - Body innerText prominently contains "Account suspended" and the explanation
+  - No PROFILE_USER_NAME block (can't see the user's profile header)
+  - No tweet articles
+
+  Auth: authenticated page (has SideNav)
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Account suspended / X</title>
+</head>
+<body>
+  <!-- Authenticated nav -->
+  <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser"></div>
+
+  <div data-testid="primaryColumn">
+    <div role="heading" aria-level="2">Account suspended</div>
+    <p>
+      X suspends accounts which violate the
+      <a href="/en/tos">X Rules</a>.
+    </p>
+    <p>
+      This account has been suspended. If you believe your account was
+      suspended in error, you can appeal by visiting the
+      <a href="/account/access">Help Center</a>.
+    </p>
+  </div>
+</body>
+</html>

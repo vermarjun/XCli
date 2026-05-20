@@ -36,6 +36,7 @@ from xcli.exceptions import AuthenticationError, RateLimitError
 from xcli.scraping.parsing import (
     extract_links_from_anchors,
     parse_iso_datetime,
+    parse_join_date,
     parse_metric_count,
     parse_post_id_from_href,
     parse_username_from_avatar_testid,
@@ -44,8 +45,17 @@ from xcli.scraping.parsing import (
 from xcli.scraping.selectors import (
     ACCOUNT_SWITCHER_BUTTON,
     AD_INDICATOR,
+    EMPTY_STATE_HEADER,
     LOGIN_BUTTON,
     PRIMARY_COLUMN,
+    PROFILE_DESCRIPTION,
+    PROFILE_ERROR_LABELS,
+    PROFILE_FOLLOWERS_LINK,
+    PROFILE_FOLLOWING_LINK,
+    PROFILE_JOIN_DATE,
+    PROFILE_LOCATION,
+    PROFILE_URL_FIELD,
+    PROFILE_USER_NAME,
     SOCIAL_CONTEXT,
     TIMELINE_CELL,
     TWEET_ARTICLE,
@@ -651,3 +661,433 @@ class XExtractor:
             reply.pop("comments_partial", None)
 
         return replies
+
+    # ------------------------------------------------------------------
+    # _detect_profile_error
+    # ------------------------------------------------------------------
+
+    async def _detect_profile_error(self, username: str) -> str | None:
+        """Detect profile-level error states (not_found, suspended, protected).
+
+        Detection is structural/URL-first; text matching is a final fallback
+        using a per-locale label table (English-only in v1 — documented
+        limitation in PROFILE_ERROR_LABELS).
+
+        Args:
+            username: The handle being looked up (used for not_found URL check).
+
+        Returns:
+            One of ``"not_found"``, ``"suspended"``, ``"protected"``, or
+            ``None`` if the profile appears normal.
+        """
+        labels = PROFILE_ERROR_LABELS.get("en", {})
+        try:
+            body_text: str = await self._page.evaluate("() => document.body.innerText || ''")
+        except Exception:
+            body_text = ""
+
+        # --- Suspended: title or body contains the suspended marker ---
+        try:
+            title: str = await self._page.evaluate("() => document.title || ''")
+        except Exception:
+            title = ""
+
+        suspended_markers = labels.get("suspended", ())
+        for marker in suspended_markers:
+            if marker in title or marker in body_text:
+                return "suspended"
+
+        # --- Not found: EMPTY_STATE_HEADER present + body contains not_found text ---
+        try:
+            empty_state_count: int = await self._page.evaluate(
+                f"() => document.querySelectorAll('{EMPTY_STATE_HEADER}').length"
+            )
+        except Exception:
+            empty_state_count = 0
+
+        if empty_state_count > 0:
+            not_found_markers = labels.get("not_found", ())
+            for marker in not_found_markers:
+                if marker in body_text:
+                    return "not_found"
+
+        # --- Protected: body text contains protected marker AND no tweets ---
+        protected_markers = labels.get("protected", ())
+        for marker in protected_markers:
+            if marker in body_text:
+                # Also verify there are no tweets (profile header still visible but timeline locked)
+                try:
+                    tweet_count: int = await self._page.evaluate(
+                        f"() => document.querySelectorAll('{TWEET_ARTICLE}').length"
+                    )
+                except Exception:
+                    tweet_count = 0
+                if tweet_count == 0:
+                    return "protected"
+
+        return None
+
+    # ------------------------------------------------------------------
+    # _profile_error_result
+    # ------------------------------------------------------------------
+
+    def _profile_error_result(
+        self,
+        url: str,
+        username: str,
+        error_kind: str,
+        captured_at: str,
+    ) -> dict:
+        """Build a well-formed result dict for a profile error state.
+
+        The result has the same top-level shape as a normal research_profile
+        result, but with null profile fields and an appropriate warning.  The
+        CLI layer translates any truthy not_found/suspended/protected flag to
+        exit code 4.
+        """
+        canonical_url = url if url.endswith("/") else url + "/"
+        return {
+            "captured_at": captured_at,
+            "username": username,
+            "url": canonical_url,
+            "profile": {
+                "display_name": None,
+                "handle": f"@{username}",
+                "bio": None,
+                "bio_innertext": None,
+                "verified": False,
+                "verified_kind": None,
+                "location": None,
+                "website": None,
+                "joined": None,
+                "joined_iso": None,
+                "following_count": None,
+                "followers_count": None,
+                "links": [],
+                "protected": error_kind == "protected",
+                "suspended": error_kind == "suspended",
+                "not_found": error_kind == "not_found",
+            },
+            "posts": [],
+            "warnings": [f"Profile error: {error_kind}"],
+        }
+
+    # ------------------------------------------------------------------
+    # _extract_profile_block
+    # ------------------------------------------------------------------
+
+    # JS selectors injected into _EXTRACT_PROFILE_JS at call time
+    _EXTRACT_PROFILE_JS = r"""
+    ({ userNameSelector, descriptionSelector, urlFieldSelector,
+       locationSelector, joinDateSelector, followersSelector,
+       followingSelector }) => {
+      const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+
+      // --- display name + handle ---
+      // Strategy 1: iterate all text nodes / spans directly (most reliable —
+      // inline spans may not produce newlines in innerText without CSS).
+      let displayName = null;
+      let handle = null;
+      const nameBlock = document.querySelector(userNameSelector);
+      if (nameBlock) {
+        // Walk all leaf text nodes and span text content
+        const walker = document.createTreeWalker(
+          nameBlock, NodeFilter.SHOW_TEXT, null
+        );
+        let node;
+        while ((node = walker.nextNode())) {
+          const t = (node.textContent || '').trim();
+          if (!t) continue;
+          if (t.startsWith('@') && !handle) {
+            handle = t;
+          } else if (!displayName && !t.startsWith('@')) {
+            // Skip svg title text or single-char artifacts
+            if (t.length > 1) displayName = t;
+          }
+        }
+        // Fallback: try newline split of innerText
+        if (!handle || !displayName) {
+          const lines = (nameBlock.innerText || '').split('\n').map(s => s.trim()).filter(Boolean);
+          for (const line of lines) {
+            if (line.startsWith('@') && !handle) {
+              handle = line;
+            } else if (!displayName && !line.startsWith('@') && line.length > 1) {
+              displayName = line;
+            }
+          }
+        }
+        if (!displayName) displayName = normalize(nameBlock.innerText || '');
+      }
+
+      // --- verified / verified_kind (locale-limited: reads SVG aria-label in English) ---
+      let verified = false;
+      let verifiedKind = null;
+      if (nameBlock) {
+        const svgs = nameBlock.querySelectorAll('svg[aria-label]');
+        for (const svg of svgs) {
+          const lbl = (svg.getAttribute('aria-label') || '').toLowerCase();
+          if (lbl.includes('verified')) {
+            verified = true;
+            if (lbl.includes('gold')) {
+              verifiedKind = 'gold';
+            } else if (lbl.includes('gray') || lbl.includes('grey')) {
+              verifiedKind = 'gray';
+            } else {
+              verifiedKind = 'blue';
+            }
+            break;
+          }
+        }
+      }
+
+      // --- bio ---
+      const descEl = document.querySelector(descriptionSelector);
+      const bioInnertext = descEl ? (descEl.innerText || '') : '';
+      const bio = normalize(bioInnertext);
+
+      // --- bio links (anchors in description) ---
+      const bioAnchors = descEl
+        ? Array.from(descEl.querySelectorAll('a[href]')).map(a => ({
+            href: a.href || a.getAttribute('href') || '',
+            aria_label: a.getAttribute('aria-label') || '',
+            expanded_url: a.dataset ? (a.dataset.expandedUrl || '') : '',
+            text: normalize(a.innerText || a.textContent),
+            source: 'bio',
+          }))
+        : [];
+
+      // --- website ---
+      let websiteUrl = null;
+      const urlContainer = document.querySelector(urlFieldSelector);
+      let websiteAnchor = null;
+      if (urlContainer) {
+        const a = urlContainer.querySelector('a[href]');
+        if (a) {
+          websiteAnchor = a;
+          // Priority: data-expanded-url > aria-label (if URL) > href
+          const expandedUrl = a.dataset ? (a.dataset.expandedUrl || '') : '';
+          const ariaLabel = a.getAttribute('aria-label') || '';
+          const href = a.href || a.getAttribute('href') || '';
+          if (expandedUrl && expandedUrl.startsWith('http')) {
+            websiteUrl = expandedUrl;
+          } else if (ariaLabel && ariaLabel.startsWith('http')) {
+            websiteUrl = ariaLabel;
+          } else if (href && href.startsWith('http')) {
+            websiteUrl = href;
+          }
+        }
+      }
+
+      const websiteAnchors = websiteAnchor
+        ? [{
+            href: websiteAnchor.href || websiteAnchor.getAttribute('href') || '',
+            aria_label: websiteAnchor.getAttribute('aria-label') || '',
+            expanded_url: websiteAnchor.dataset ? (websiteAnchor.dataset.expandedUrl || '') : '',
+            text: normalize(websiteAnchor.innerText || websiteAnchor.textContent),
+            source: 'website',
+          }]
+        : [];
+
+      // --- location ---
+      const locEl = document.querySelector(locationSelector);
+      const location = locEl ? normalize(locEl.innerText || '') : null;
+
+      // --- joined ---
+      const joinEl = document.querySelector(joinDateSelector);
+      const joined = joinEl ? normalize(joinEl.innerText || '') : null;
+
+      // --- followers count (read innerText of matching anchor) ---
+      let followersText = null;
+      const followerLinks = Array.from(document.querySelectorAll(followersSelector));
+      if (followerLinks.length > 0) {
+        followersText = normalize(followerLinks[0].innerText || '');
+      }
+
+      // --- following count ---
+      let followingText = null;
+      const followingLinks = Array.from(document.querySelectorAll(followingSelector));
+      if (followingLinks.length > 0) {
+        followingText = normalize(followingLinks[0].innerText || '');
+      }
+
+      return {
+        displayName,
+        handle,
+        verified,
+        verifiedKind,
+        bio,
+        bioInnertext,
+        bioAnchors,
+        websiteUrl,
+        websiteAnchors,
+        location: location || null,
+        joined: joined || null,
+        followersText,
+        followingText,
+      };
+    }
+    """
+
+    async def _extract_profile_block(self) -> dict:
+        """Extract the profile header via a single page.evaluate call.
+
+        Returns a flat profile dict with fields matching plan §4.2 schema.
+        Python-side post-processing applies parse_join_date and
+        extract_links_from_anchors.
+        """
+        js_args = {
+            "userNameSelector": PROFILE_USER_NAME,
+            "descriptionSelector": PROFILE_DESCRIPTION,
+            "urlFieldSelector": PROFILE_URL_FIELD,
+            "locationSelector": PROFILE_LOCATION,
+            "joinDateSelector": PROFILE_JOIN_DATE,
+            "followersSelector": PROFILE_FOLLOWERS_LINK,
+            "followingSelector": PROFILE_FOLLOWING_LINK,
+        }
+
+        try:
+            raw: dict = await self._page.evaluate(self._EXTRACT_PROFILE_JS, js_args)
+        except Exception as e:
+            logger.warning("_extract_profile_block evaluate error: %s", e)
+            raw = {}
+
+        # --- Python-side post-processing ---
+        joined_raw: str | None = raw.get("joined")
+        joined_iso = parse_join_date(joined_raw)
+
+        followers_count = parse_metric_count(raw.get("followersText"))
+        following_count = parse_metric_count(raw.get("followingText"))
+
+        # Combine bio anchors + website anchors then deduplicate
+        bio_anchors: list[dict] = raw.get("bioAnchors") or []
+        website_anchors: list[dict] = raw.get("websiteAnchors") or []
+        all_anchors = bio_anchors + website_anchors
+        links = extract_links_from_anchors(all_anchors)
+
+        return {
+            "display_name": raw.get("displayName"),
+            "handle": raw.get("handle"),
+            "bio": raw.get("bio") or None,
+            "bio_innertext": raw.get("bioInnertext") or None,
+            "verified": bool(raw.get("verified")),
+            "verified_kind": raw.get("verifiedKind"),
+            "location": raw.get("location"),
+            "website": raw.get("websiteUrl"),
+            "joined": joined_raw,
+            "joined_iso": joined_iso,
+            "following_count": following_count,
+            "followers_count": followers_count,
+            "links": links,
+            "protected": False,
+            "suspended": False,
+            "not_found": False,
+        }
+
+    # ------------------------------------------------------------------
+    # research_profile
+    # ------------------------------------------------------------------
+
+    async def research_profile(self, username: str, posts: int, comments_per: int) -> dict:
+        """Research a user's profile: bio + top N posts + Y comments each.
+
+        Args:
+            username:     X handle to research (without leading ``@``).
+            posts:        Number of profile posts to return (ads excluded).
+            comments_per: Number of top reply comments per post.
+
+        Returns:
+            Profile dict matching plan §4.2 schema:
+            {captured_at, username, url, profile, posts, warnings}
+
+        Raises:
+            AuthenticationError: If session is expired or login wall is hit.
+            RateLimitError: If hard-blocked at /account/access.
+        """
+        from urllib.parse import quote_plus
+
+        url = f"https://x.com/{quote_plus(username)}"
+        captured_at = utcnow_iso()
+        warnings: list[str] = []
+
+        # 1. Navigate to the profile page
+        await self._goto_with_auth_checks(self._resolve_url(url))
+
+        # 2. Detect profile errors FIRST (before waiting for normal selectors)
+        error_kind = await self._detect_profile_error(username)
+        if error_kind:
+            return self._profile_error_result(url, username, error_kind, captured_at)
+
+        # 3. Wait for the profile header to be present
+        try:
+            await self._page.wait_for_selector(PROFILE_USER_NAME, timeout=10000)
+        except PlaywrightTimeoutError:
+            warnings.append("Profile header did not render within timeout")
+
+        await dismiss_modals(self._page)
+
+        # 4. Extract the profile header block in one JS evaluate
+        profile = await self._extract_profile_block()
+
+        # 5. Capture-as-you-scroll to collect timeline posts
+        scope = PRIMARY_COLUMN
+
+        async def _extract(p: Page) -> list[dict]:
+            return await self._extract_visible_tweets(scope_selector=scope)
+
+        raw_posts = await capture_as_you_scroll(
+            self._page,
+            extract_fn=_extract,
+            target=posts + 10,
+            max_scrolls=15,
+            max_stale=3,
+            wheel_delta=1500,
+            pause_seconds=1.0,
+        )
+
+        # Filter ads, truncate
+        timeline_posts = [p for p in raw_posts if not p.get("is_ad")][:posts]
+
+        # 6. Fetch comments for each post
+        for post in timeline_posts:
+            post_url = post.get("url") or ""
+            if not post_url or comments_per == 0:
+                post["comments"] = []
+                post["comments_captured"] = 0
+                post["comments_partial"] = False
+                continue
+
+            await asyncio.sleep(NAV_DELAY)
+            try:
+                comments = await self.fetch_thread_comments(post_url, comments_per)
+                post["comments"] = comments
+                post["comments_captured"] = len(comments)
+                post["comments_partial"] = len(comments) < comments_per
+            except RateLimitError as e:
+                logger.warning(
+                    "RateLimitError fetching comments for %s: %s — skipping",
+                    post_url,
+                    e,
+                )
+                warnings.append(f"Rate-limited fetching comments for {post.get('id')}: {e}")
+                post["comments"] = []
+                post["comments_captured"] = 0
+                post["comments_partial"] = True
+            except AuthenticationError:
+                raise
+            except Exception as e:
+                logger.warning("Error fetching comments for %s: %s", post_url, e)
+                warnings.append(f"Error fetching comments for {post.get('id')}: {e}")
+                post["comments"] = []
+                post["comments_captured"] = 0
+                post["comments_partial"] = True
+
+        # 7. Return the full result
+        canonical_url = url if url.endswith("/") else url + "/"
+        return {
+            "captured_at": captured_at,
+            "username": username,
+            "url": canonical_url,
+            "profile": profile,
+            "posts": timeline_posts,
+            "warnings": warnings,
+        }

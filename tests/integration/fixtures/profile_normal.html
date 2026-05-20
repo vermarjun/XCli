@@ -1,98 +1,145 @@
 <!DOCTYPE html>
 <!--
-  profile_normal.html — minimal X.com user profile page fixture.
+  profile_normal.html — X.com user profile page fixture for Phase 2 tests.
 
-  Used by Phase 2 tests; defined now for symmetry and auth-detection tests.
-
-  Key testids:
-  - SideNav_AccountSwitcher_Button  : logged-in signal
-  - primaryColumn                    : page-ready signal
-  - UserName                         : profile name/handle
-  - UserDescription                  : bio
-  - UserUrl                          : website
-  - UserLocation                     : location
-  - UserJoinDate                     : join date
-  - tweet (3 posts in timeline)
+  Models a verified account (@elonmusk) with:
+  - Verified SVG badge (blue)
+  - Bio with t.co links (data-expanded-url + aria-label variants)
+  - Website field
+  - Location
+  - Join date ("Joined June 2009")
+  - 4.5M followers / 123 following
+  - 4 timeline tweet articles (no ads)
 
   Auth: authenticated page (has SideNav + primaryColumn)
 -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Example User (@exampleuser) / X</title>
+  <title>Elon Musk (@elonmusk) / X</title>
 </head>
 <body>
   <!-- Authenticated nav -->
   <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser"></div>
 
   <div data-testid="primaryColumn">
-    <!-- Profile header -->
+
+    <!-- ============================================================
+         Profile header
+         ============================================================ -->
     <div data-testid="UserName">
-      <span>Example User</span>
-      <span>@exampleuser</span>
+      <span>Elon Musk</span>
+      <!-- Verified badge (blue) — locale-limited: reads "Verified account" in English -->
+      <svg aria-label="Verified account" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>
+      <span>@elonmusk</span>
     </div>
+
     <div data-testid="UserDescription">
-      This is the bio. Visit
-      <a href="https://t.co/abc" data-expanded-url="https://example.com" aria-label="https://example.com">https://t.co/abc</a>
-      for more.
+      CEO of Tesla, SpaceX, and X. Mars or bust.
+      Visit <a href="https://t.co/abc123"
+               data-expanded-url="https://tesla.com"
+               aria-label="https://tesla.com">https://t.co/abc123</a>
+      and also check
+      <a href="https://t.co/xyz789"
+         aria-label="https://spacex.com">https://t.co/xyz789</a>
+      for updates.
     </div>
+
     <div data-testid="UserUrl">
-      <a href="https://example.com">example.com</a>
+      <a href="https://t.co/official"
+         data-expanded-url="https://x.com/elonmusk"
+         aria-label="https://x.com/elonmusk">x.com/elonmusk</a>
     </div>
-    <div data-testid="UserLocation">San Francisco, CA</div>
-    <div data-testid="UserJoinDate">Joined March 2015</div>
-    <a href="/exampleuser/followers">1,234 Followers</a>
-    <a href="/exampleuser/following">567 Following</a>
 
-    <!-- Timeline posts -->
+    <div data-testid="UserLocation">Austin, TX</div>
+    <div data-testid="UserJoinDate">Joined June 2009</div>
+
+    <!-- Followers / Following links -->
+    <a href="/elonmusk/followers">4.5M Followers</a>
+    <a href="/elonmusk/following">123 Following</a>
+
+    <!-- ============================================================
+         Timeline post 1 — regular tweet (pinned)
+         ============================================================ -->
     <div data-testid="cellInnerDiv">
+      <div data-testid="socialContext">Pinned</div>
       <article data-testid="tweet" role="article">
-        <div data-testid="UserAvatar-Container-exampleuser"></div>
+        <div data-testid="UserAvatar-Container-elonmusk"></div>
         <div data-testid="User-Name">
-          <span>Example User</span>
-          <span>@exampleuser</span>
+          <span>Elon Musk</span>
+          <span>@elonmusk</span>
         </div>
-        <div data-testid="tweetText">First post on the profile page.</div>
-        <time datetime="2026-05-19T08:00:00.000Z">8:00 AM</time>
-        <a href="/exampleuser/status/300">May 19</a>
-        <div data-testid="reply" aria-label="2 replies"></div>
-        <div data-testid="retweet" aria-label="1 repost"></div>
-        <div data-testid="like" aria-label="20 likes"></div>
-        <div data-testid="bookmark" aria-label="3 bookmarks"></div>
+        <div data-testid="tweetText">The thing I love most about X is free speech.</div>
+        <time datetime="2026-05-10T12:00:00.000Z">May 10</time>
+        <a href="/elonmusk/status/300">May 10</a>
+        <div data-testid="reply" aria-label="1.2K replies"></div>
+        <div data-testid="retweet" aria-label="3.4K reposts"></div>
+        <div data-testid="like" aria-label="25K likes"></div>
+        <div data-testid="bookmark" aria-label="500 bookmarks"></div>
+        <a href="/elonmusk/status/300/analytics" aria-label="15.2M views">Views</a>
       </article>
     </div>
 
+    <!-- ============================================================
+         Timeline post 2
+         ============================================================ -->
     <div data-testid="cellInnerDiv">
       <article data-testid="tweet" role="article">
-        <div data-testid="UserAvatar-Container-exampleuser"></div>
+        <div data-testid="UserAvatar-Container-elonmusk"></div>
         <div data-testid="User-Name">
-          <span>Example User</span>
-          <span>@exampleuser</span>
+          <span>Elon Musk</span>
+          <span>@elonmusk</span>
         </div>
-        <div data-testid="tweetText">Second post with some interesting content.</div>
-        <time datetime="2026-05-18T10:00:00.000Z">10:00 AM</time>
-        <a href="/exampleuser/status/301">May 18</a>
-        <div data-testid="reply" aria-label="0 replies"></div>
-        <div data-testid="retweet" aria-label="0 reposts"></div>
-        <div data-testid="like" aria-label="8 likes"></div>
-        <div data-testid="bookmark" aria-label="1 bookmark"></div>
+        <div data-testid="tweetText">Starship will reach orbit this year.</div>
+        <time datetime="2026-05-12T08:30:00.000Z">May 12</time>
+        <a href="/elonmusk/status/301">May 12</a>
+        <div data-testid="reply" aria-label="800 replies"></div>
+        <div data-testid="retweet" aria-label="2K reposts"></div>
+        <div data-testid="like" aria-label="40K likes"></div>
+        <div data-testid="bookmark" aria-label="1.1K bookmarks"></div>
+        <a href="/elonmusk/status/301/analytics" aria-label="10M views">Views</a>
       </article>
     </div>
 
+    <!-- ============================================================
+         Timeline post 3
+         ============================================================ -->
     <div data-testid="cellInnerDiv">
       <article data-testid="tweet" role="article">
-        <div data-testid="UserAvatar-Container-exampleuser"></div>
+        <div data-testid="UserAvatar-Container-elonmusk"></div>
         <div data-testid="User-Name">
-          <span>Example User</span>
-          <span>@exampleuser</span>
+          <span>Elon Musk</span>
+          <span>@elonmusk</span>
         </div>
-        <div data-testid="tweetText">Third post from the profile timeline.</div>
-        <time datetime="2026-05-17T12:00:00.000Z">Noon</time>
-        <a href="/exampleuser/status/302">May 17</a>
-        <div data-testid="reply" aria-label="1 reply"></div>
-        <div data-testid="retweet" aria-label="0 reposts"></div>
-        <div data-testid="like" aria-label="4 likes"></div>
-        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+        <div data-testid="tweetText">Tesla FSD version 13 is incredible.</div>
+        <time datetime="2026-05-15T10:00:00.000Z">May 15</time>
+        <a href="/elonmusk/status/302">May 15</a>
+        <div data-testid="reply" aria-label="500 replies"></div>
+        <div data-testid="retweet" aria-label="1.5K reposts"></div>
+        <div data-testid="like" aria-label="55K likes"></div>
+        <div data-testid="bookmark" aria-label="900 bookmarks"></div>
+        <a href="/elonmusk/status/302/analytics" aria-label="8M views">Views</a>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Timeline post 4
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-elonmusk"></div>
+        <div data-testid="User-Name">
+          <span>Elon Musk</span>
+          <span>@elonmusk</span>
+        </div>
+        <div data-testid="tweetText">Good morning X!</div>
+        <time datetime="2026-05-19T07:00:00.000Z">May 19</time>
+        <a href="/elonmusk/status/303">May 19</a>
+        <div data-testid="reply" aria-label="200 replies"></div>
+        <div data-testid="retweet" aria-label="750 reposts"></div>
+        <div data-testid="like" aria-label="30K likes"></div>
+        <div data-testid="bookmark" aria-label="300 bookmarks"></div>
+        <a href="/elonmusk/status/303/analytics" aria-label="5M views">Views</a>
       </article>
     </div>
 

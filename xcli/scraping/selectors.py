@@ -73,6 +73,17 @@ PROFILE_PINNED_BADGE = SOCIAL_CONTEXT  # backward-compat alias; "Pinned" on pinn
 # Phase 2 will rely on this; define now for completeness
 EMPTY_STATE_HEADER = '[data-testid="empty_state_header_text"]'
 
+# Per-locale profile error text labels (structural signals preferred first;
+# text used only as disambiguation). Document: English-only in v1. When X
+# adds new locales, extend this table — the detection code iterates all values.
+PROFILE_ERROR_LABELS: dict[str, dict[str, tuple[str, ...]]] = {
+    "en": {
+        "not_found": ("This account doesn't exist",),
+        "suspended": ("Account suspended", "has been suspended"),
+        "protected": ("These posts are protected", "These Tweets are protected"),
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Auth wall / blocker signals (URL- and structural-first)
 # ---------------------------------------------------------------------------
