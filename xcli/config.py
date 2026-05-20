@@ -42,8 +42,8 @@ class BrowserConfig:
     headless: bool = True
     slow_mo: int = 0  # ms between browser actions (debugging)
     user_agent: str | None = None
-    viewport_width: int = 1280
-    viewport_height: int = 720
+    viewport_width: int = 1920
+    viewport_height: int = 1080
     default_timeout: int = 5000  # ms for page operations
     chrome_path: str | None = None
     user_data_dir: str = "~/.xcli/profile"
@@ -176,3 +176,15 @@ def _apply_env(config: AppConfig) -> None:
 
     if v := os.environ.get("XCLI_CHANNEL"):
         config.browser.channel = v.strip()
+
+    if v := os.environ.get("XCLI_VIEWPORT_WIDTH"):
+        try:
+            config.browser.viewport_width = int(v)
+        except ValueError:
+            raise ConfigurationError(f"XCLI_VIEWPORT_WIDTH must be an integer, got '{v}'")
+
+    if v := os.environ.get("XCLI_VIEWPORT_HEIGHT"):
+        try:
+            config.browser.viewport_height = int(v)
+        except ValueError:
+            raise ConfigurationError(f"XCLI_VIEWPORT_HEIGHT must be an integer, got '{v}'")

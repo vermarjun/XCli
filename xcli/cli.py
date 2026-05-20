@@ -125,13 +125,24 @@ def logout() -> None:
 
 
 @app.command()
-def status() -> None:
+def status(
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help=(
+            "Run browser headless (default: visible). "
+            "Visible mode is the default for best stealth posture. "
+            "Use --headless only in CI/Docker environments without a display."
+        ),
+    ),
+) -> None:
     """Print session state and exit.
 
+    Runs with a visible browser by default (same stealth posture as feed/profile).
     Output is JSON to stdout. Exit code 0 if authenticated, 2 if not.
     """
     try:
-        result = asyncio.run(_status_cmd())
+        result = asyncio.run(_status_cmd(headless=headless))
         typer.echo(json.dumps(result, indent=2))
         if not result.get("authenticated"):
             raise typer.Exit(code=2)
@@ -151,7 +162,7 @@ def status() -> None:
         raise typer.Exit(code=1) from e
 
 
-async def _status_cmd() -> dict:
+async def _status_cmd(headless: bool = False) -> dict:
     from xcli.common_utils import utcnow_iso
     from xcli.session_state import (
         load_source_state,
@@ -183,14 +194,14 @@ async def _status_cmd() -> dict:
     except Exception:
         pass
 
-    # Do a lightweight headless browser check
+    # Do a browser check (headed by default for best stealth posture)
     authed = False
     handle: str | None = None
     try:
         from xcli.core.auth import is_logged_in
         from xcli.drivers.browser import close_browser, get_or_create_browser
 
-        browser = await get_or_create_browser(headless=True)
+        browser = await get_or_create_browser(headless=headless)
         authed = await is_logged_in(browser.page)
 
         # Try to extract handle from sidebar account switcher
@@ -254,6 +265,15 @@ def feed(
         max=1.0,
         help="Fractional jitter on nav delays (0.0–1.0). Overrides XCLI_JITTER_PCT.",
     ),
+    no_human_pace: bool = typer.Option(
+        False,
+        "--no-human-pace",
+        help=(
+            "Disable humanized scroll chunking and read pauses. "
+            "Use only in CI or debug sessions — defeats behavioral stealth. "
+            "Equivalent to setting XCLI_HUMAN_PACE=0."
+        ),
+    ),
 ) -> None:
     """Fetch top N posts from your home feed with top Y comments each.
 
@@ -261,11 +281,18 @@ def feed(
     UA, WebGL OffScreen renderer, and Plugins Length 0 tells). Use ``--headless``
     only in CI/Docker environments without a display.
 
+    Scroll events are chunked to mimic real human trackpad/wheel behavior
+    by default. Use ``--no-human-pace`` to revert to single-event scrolling.
+
     Requires an authenticated session. Run ``xcli login`` first if needed.
 
     Output is JSON (stdout) unless ``--output`` is specified.
     Exit codes: 0 ok, 2 auth needed, 3 rate-limited, 1 other error.
     """
+    import os
+
+    if no_human_pace:
+        os.environ["XCLI_HUMAN_PACE"] = "0"
     _setup_logging()
     try:
         result = asyncio.run(_feed_cmd(count, comments_per, headless, jitter_pct, channel))
@@ -340,6 +367,15 @@ def profile(
         max=1.0,
         help="Fractional jitter on nav delays (0.0–1.0). Overrides XCLI_JITTER_PCT.",
     ),
+    no_human_pace: bool = typer.Option(
+        False,
+        "--no-human-pace",
+        help=(
+            "Disable humanized scroll chunking and read pauses. "
+            "Use only in CI or debug sessions — defeats behavioral stealth. "
+            "Equivalent to setting XCLI_HUMAN_PACE=0."
+        ),
+    ),
 ) -> None:
     """Deep-research a user's profile + their top N posts + Y comments each.
 
@@ -347,11 +383,18 @@ def profile(
     UA, WebGL OffScreen renderer, and Plugins Length 0 tells). Use ``--headless``
     only in CI/Docker environments without a display.
 
+    Scroll events are chunked to mimic real human trackpad/wheel behavior
+    by default. Use ``--no-human-pace`` to revert to single-event scrolling.
+
     Requires an authenticated session. Run ``xcli login`` first if needed.
 
     Output is JSON (stdout) unless ``--output`` is specified.
     Exit codes: 0 ok, 2 auth needed, 3 rate-limited, 4 not-found/suspended/protected, 1 other.
     """
+    import os
+
+    if no_human_pace:
+        os.environ["XCLI_HUMAN_PACE"] = "0"
     _setup_logging()
     try:
         result = asyncio.run(
@@ -416,6 +459,15 @@ async def _profile_cmd(
 def doctor(
     skip_x: bool = typer.Option(False, "--skip-x", help="Skip the x.com reachability check."),
     json_output: bool = typer.Option(False, "--json", help="Write JSON summary to stdout."),
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help=(
+            "Run browser headless (default: visible). "
+            "Visible mode is the default so doctor checks the same stealth posture "
+            "you actually use for scraping. Use --headless only in CI/Docker without a display."
+        ),
+    ),
     channel: str | None = typer.Option(
         None,
         "--channel",
@@ -428,16 +480,23 @@ def doctor(
 ) -> None:
     """Run stealth fingerprint checks and print a PASS/FAIL report.
 
+    Runs with a visible browser by default — doctor verifies the same stealth
+    posture you actually use when scraping.
+
     Runs:
       - bot.sannysoft.com fingerprint detection
       - creepjs trust score (advisory)
+      - arh.antoinevastel.com/bots/areyouheadless verdict (advisory)
+      - browserscan.net/bot-detection verdict (advisory)
+      - pixelscan.net/bot-check verdict (advisory)
       - x.com/home reachability (if logged in)
 
-    Exit 0 if all critical checks pass, 1 otherwise.
+    Exit 0 if all critical checks pass, 1 otherwise. Advisory checks
+    (creepjs + the three bot-detection sites) never gate the exit code.
     JSON output (--json) goes to stdout; the human-readable table goes to stderr.
     """
     try:
-        results = asyncio.run(_doctor_cmd(skip_x=skip_x, channel=channel))
+        results = asyncio.run(_doctor_cmd(skip_x=skip_x, channel=channel, headless=headless))
     except Exception as e:
         console.print(f"[red]doctor failed:[/red] {e}")
         raise typer.Exit(code=1) from e
@@ -453,10 +512,10 @@ def doctor(
         raise typer.Exit(code=1)
 
 
-async def _doctor_cmd(*, skip_x: bool, channel: str | None = None) -> list:
+async def _doctor_cmd(*, skip_x: bool, channel: str | None = None, headless: bool = False) -> list:
     from xcli.checks import run_all_checks
 
-    return await run_all_checks(include_x_home=not skip_x, channel=channel)
+    return await run_all_checks(include_x_home=not skip_x, channel=channel, headless=headless)
 
 
 def _render_doctor_table(results: list) -> None:

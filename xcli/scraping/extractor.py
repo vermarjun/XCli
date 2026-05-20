@@ -18,7 +18,6 @@ URL override strategy for integration tests:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import random
 from typing import Any
@@ -32,6 +31,7 @@ from xcli.core.auth import (
     detect_auth_barrier_quick,
     detect_rate_limit,
 )
+from xcli.core.human import default_human_pace, human_read_pause
 from xcli.core.utils import capture_as_you_scroll, dismiss_modals
 from xcli.exceptions import AuthenticationError, RateLimitError
 from xcli.scraping.parsing import (
@@ -733,7 +733,11 @@ class XExtractor:
                 post["comments_partial"] = False
                 continue
 
-            await asyncio.sleep(_jitter(NAV_DELAY, self._jitter_pct))
+            await human_read_pause(
+                seconds=_jitter(NAV_DELAY, self._jitter_pct),
+                intent="deep",
+                config=default_human_pace(),
+            )
             try:
                 comments = await self.fetch_thread_comments(post_url, comments_per)
                 post["comments"] = comments
@@ -1291,7 +1295,11 @@ class XExtractor:
                 post["comments_partial"] = False
                 continue
 
-            await asyncio.sleep(_jitter(NAV_DELAY, self._jitter_pct))
+            await human_read_pause(
+                seconds=_jitter(NAV_DELAY, self._jitter_pct),
+                intent="deep",
+                config=default_human_pace(),
+            )
             try:
                 comments = await self.fetch_thread_comments(post_url, comments_per)
                 post["comments"] = comments

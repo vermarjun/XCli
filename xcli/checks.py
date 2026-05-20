@@ -652,6 +652,295 @@ async def check_x_home(page: Any) -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# Additional bot-detection sites — areyouheadless / browserscan / pixelscan
+# (advisory; critical=False — these are extra fingerprint signals only)
+# ---------------------------------------------------------------------------
+
+_AREYOUHEADLESS_URL = "https://arh.antoinevastel.com/bots/areyouheadless"
+_BROWSERSCAN_URL = "https://www.browserscan.net/bot-detection"
+_PIXELSCAN_URL = "https://pixelscan.net/bot-check"
+
+# browserscan renders the overall verdict immediately after the literal
+# "Test Results:" label, e.g. "Test Results:\nRobot".  The verdict word is
+# alphabetic only — we don't want to capture trailing whitespace or markup.
+_BROWSERSCAN_VERDICT_RE = re.compile(r"Test\s+Results\s*:\s*([A-Za-z][A-Za-z\s\-]{0,30})")
+
+
+def parse_areyouheadless(payload: dict[str, Any]) -> CheckResult:
+    """Parse antoinevastel/areyouheadless result.
+
+    Payload schema:
+        {"verdict_text": str | None, "verdict_class": str | None}
+
+    The page renders ``<div id="res"><p class="success|error">…</p></div>``.
+    class="success" → PASS, class="error" → FAIL, anything else → WARN.
+    """
+    text = (payload.get("verdict_text") or "").strip()
+    cls = (payload.get("verdict_class") or "").strip().lower()
+
+    if "success" in cls:
+        return CheckResult(
+            name="areyouheadless",
+            category="fingerprint",
+            status=CheckStatus.PASS,
+            detail=text or "Reported as not headless.",
+            critical=False,
+            evidence=payload,
+        )
+    if "error" in cls:
+        return CheckResult(
+            name="areyouheadless",
+            category="fingerprint",
+            status=CheckStatus.FAIL,
+            detail=text or "Reported as Chrome headless.",
+            critical=False,
+            evidence=payload,
+        )
+    return CheckResult(
+        name="areyouheadless",
+        category="fingerprint",
+        status=CheckStatus.WARN,
+        detail=f"Could not classify verdict (text={text!r}, class={cls!r}).",
+        critical=False,
+        evidence=payload,
+    )
+
+
+def parse_browserscan(payload: dict[str, Any]) -> CheckResult:
+    """Parse browserscan.net/bot-detection result.
+
+    Payload schema:
+        {"verdict_text": str | None, "body_snippet": str | None}
+
+    The page surfaces an overall verdict after "Test Results:".  Known values
+    include "Robot" (FAIL) and "Normal"/"Human" (PASS).  Anything we can't
+    classify → WARN.
+    """
+    verdict = (payload.get("verdict_text") or "").strip()
+    lower = verdict.lower()
+
+    if not verdict:
+        return CheckResult(
+            name="browserscan_bot",
+            category="fingerprint",
+            status=CheckStatus.WARN,
+            detail="Could not find overall verdict on browserscan page.",
+            critical=False,
+            evidence=payload,
+        )
+    if "robot" in lower or "bot detected" in lower:
+        return CheckResult(
+            name="browserscan_bot",
+            category="fingerprint",
+            status=CheckStatus.FAIL,
+            detail=f"browserscan verdict: {verdict!r}",
+            critical=False,
+            evidence=payload,
+        )
+    if "normal" in lower or "human" in lower or "no bot" in lower:
+        return CheckResult(
+            name="browserscan_bot",
+            category="fingerprint",
+            status=CheckStatus.PASS,
+            detail=f"browserscan verdict: {verdict!r}",
+            critical=False,
+            evidence=payload,
+        )
+    return CheckResult(
+        name="browserscan_bot",
+        category="fingerprint",
+        status=CheckStatus.WARN,
+        detail=f"Unclassified browserscan verdict: {verdict!r}",
+        critical=False,
+        evidence=payload,
+    )
+
+
+def parse_pixelscan(payload: dict[str, Any]) -> CheckResult:
+    """Parse pixelscan.net/bot-check result.
+
+    Payload schema:
+        {"state_success_visible": bool, "state_error_visible": bool,
+         "state_default_visible": bool, "error": str | None}
+
+    The page is an Angular SPA with four state-* divs (default/loading/
+    success/error).  When the JS bot-check finishes, exactly one of
+    state-success or state-error is shown and state-default is hidden.
+
+    If hydration never settles (e.g. blocked by Cloudflare or the JS never
+    runs), all four divs remain visible from SSR — we report WARN.
+    """
+    if payload.get("error"):
+        return CheckResult(
+            name="pixelscan_bot",
+            category="fingerprint",
+            status=CheckStatus.WARN,
+            detail=f"pixelscan unreachable: {payload['error']}",
+            critical=False,
+            evidence=payload,
+        )
+
+    success = bool(payload.get("state_success_visible"))
+    error = bool(payload.get("state_error_visible"))
+    default = bool(payload.get("state_default_visible"))
+
+    # Hydrated, single verdict shown
+    if success and not error and not default:
+        return CheckResult(
+            name="pixelscan_bot",
+            category="fingerprint",
+            status=CheckStatus.PASS,
+            detail="pixelscan verdict: human (state-success visible).",
+            critical=False,
+            evidence=payload,
+        )
+    if error and not success and not default:
+        return CheckResult(
+            name="pixelscan_bot",
+            category="fingerprint",
+            status=CheckStatus.FAIL,
+            detail="pixelscan verdict: bot (state-error visible).",
+            critical=False,
+            evidence=payload,
+        )
+
+    # Otherwise: SSR-stacked / not hydrated / unclear → WARN (per design)
+    return CheckResult(
+        name="pixelscan_bot",
+        category="fingerprint",
+        status=CheckStatus.WARN,
+        detail=(
+            "pixelscan did not settle on a verdict "
+            f"(success={success}, error={error}, default={default}). "
+            "Likely blocked or page failed to hydrate."
+        ),
+        critical=False,
+        evidence=payload,
+    )
+
+
+async def check_areyouheadless(page: Any) -> CheckResult:
+    """Visit arh.antoinevastel.com/bots/areyouheadless and read the verdict."""
+    try:
+        await page.goto(_AREYOUHEADLESS_URL, wait_until="domcontentloaded", timeout=30_000)
+        # JS writes the verdict into <div id="res"> a few hundred ms after load
+        await page.wait_for_function(
+            (
+                "document.querySelector('#res')"
+                " && document.querySelector('#res').innerText.trim().length > 0"
+            ),
+            timeout=15_000,
+        )
+        verdict_text: str = await page.evaluate(
+            "() => (document.querySelector('#res')?.innerText || '').trim()"
+        )
+        verdict_class: str = await page.evaluate(
+            "() => (document.querySelector('#res p')?.className || '').trim()"
+        )
+        return parse_areyouheadless({"verdict_text": verdict_text, "verdict_class": verdict_class})
+    except Exception as exc:
+        logger.error("check_areyouheadless failed: %s", exc)
+        return CheckResult(
+            name="areyouheadless",
+            category="fingerprint",
+            status=CheckStatus.WARN,
+            detail=f"Failed to load areyouheadless: {exc}",
+            critical=False,
+            evidence={"error": str(exc)},
+        )
+
+
+async def check_browserscan(page: Any) -> CheckResult:
+    """Visit browserscan.net/bot-detection and read the overall verdict."""
+    try:
+        await page.goto(_BROWSERSCAN_URL, wait_until="domcontentloaded", timeout=30_000)
+        # Verdict is text after "Test Results:" — give the JS a few seconds.
+        await page.wait_for_function(
+            "document.body && document.body.innerText.includes('Test Results')",
+            timeout=20_000,
+        )
+        # Give the SPA a moment to render the verdict word.
+        await page.wait_for_timeout(2_000)
+        body_text: str = await page.inner_text("body")
+        m = _BROWSERSCAN_VERDICT_RE.search(body_text)
+        verdict = m.group(1).strip() if m else None
+        # Keep only the first line of the captured group — browserscan
+        # sometimes puts the verdict on its own line.
+        if verdict:
+            verdict = verdict.splitlines()[0].strip()
+        return parse_browserscan({"verdict_text": verdict, "body_snippet": body_text[:300]})
+    except Exception as exc:
+        logger.error("check_browserscan failed: %s", exc)
+        return CheckResult(
+            name="browserscan_bot",
+            category="fingerprint",
+            status=CheckStatus.WARN,
+            detail=f"Failed to load browserscan: {exc}",
+            critical=False,
+            evidence={"error": str(exc)},
+        )
+
+
+async def check_pixelscan(page: Any) -> CheckResult:
+    """Visit pixelscan.net/bot-check and detect the settled state.
+
+    pixelscan is an Angular SPA.  We wait up to 20s for Angular to converge
+    on a single visible state-* div.  If it never converges, return WARN.
+    """
+    try:
+        await page.goto(_PIXELSCAN_URL, wait_until="domcontentloaded", timeout=30_000)
+        # Poll up to 20s for a settled state (one of success/error visible
+        # AND state-default not visible).
+        try:
+            await page.wait_for_function(
+                """
+                () => {
+                  const isVis = (sel) => {
+                    const el = document.querySelector(sel);
+                    if (!el) return false;
+                    const s = getComputedStyle(el);
+                    const r = el.getBoundingClientRect();
+                    return s.display !== 'none' && s.visibility !== 'hidden'
+                      && r.width > 0 && r.height > 0;
+                  };
+                  const success = isVis('.state-success');
+                  const error = isVis('.state-error');
+                  const def = isVis('.state-default');
+                  return (success !== error) && !def;
+                }
+                """,
+                timeout=20_000,
+            )
+        except Exception:
+            # Timeout is expected when the page doesn't hydrate — parse handles WARN.
+            pass
+
+        flags: dict[str, Any] = await page.evaluate(
+            """
+            () => {
+              const isVis = (sel) => {
+                const el = document.querySelector(sel);
+                if (!el) return false;
+                const s = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                return s.display !== 'none' && s.visibility !== 'hidden'
+                  && r.width > 0 && r.height > 0;
+              };
+              return {
+                state_success_visible: isVis('.state-success'),
+                state_error_visible: isVis('.state-error'),
+                state_default_visible: isVis('.state-default'),
+              };
+            }
+            """
+        )
+        return parse_pixelscan(flags)
+    except Exception as exc:
+        logger.error("check_pixelscan failed: %s", exc)
+        return parse_pixelscan({"error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -661,12 +950,13 @@ async def run_all_checks(
     include_x_home: bool = True,
     timeout_ms: int = 30_000,
     channel: str | None = None,
+    headless: bool = True,
 ) -> list[CheckResult]:
     """Run all stealth checks in sequence (NEVER concurrently).
 
-    Opens a fresh BrowserManager headless (using the persistent profile so
-    that browser fingerprint matches production), runs checks one by one, then
-    closes the browser.
+    Opens a fresh BrowserManager (using the persistent profile so that browser
+    fingerprint matches production), runs checks one by one, then closes the
+    browser.
 
     Args:
         include_x_home: If False, skip the x.com/home reachability check.
@@ -674,6 +964,8 @@ async def run_all_checks(
                     reference; individual checks pass it to goto).
         channel:    Browser channel to use (e.g. ``"chrome"``).  None → use
                     config default (``XCLI_CHANNEL`` env or ``"chromium"``).
+        headless:   If True (default), run headless. If False, show a visible
+                    window — better stealth (real WebGL/plugins/UA).
 
     Returns:
         Flat list of CheckResult objects (all groups concatenated).
@@ -692,7 +984,7 @@ async def run_all_checks(
     browser_channel: str | None = effective_channel if effective_channel != "chromium" else None
 
     async with BrowserManager(
-        user_data_dir=profile_dir, headless=True, channel=browser_channel
+        user_data_dir=profile_dir, headless=headless, channel=browser_channel
     ) as bm:
         page = bm.page
 
@@ -706,9 +998,17 @@ async def run_all_checks(
         creepjs_result = await check_creepjs(page)
         all_results.append(creepjs_result)
 
-        # Group C: x.com/home reachability
+        # Group C: third-party bot-detection sites (all advisory, critical=False)
+        logger.info("Running Group C1: areyouheadless")
+        all_results.append(await check_areyouheadless(page))
+        logger.info("Running Group C2: browserscan.net/bot-detection")
+        all_results.append(await check_browserscan(page))
+        logger.info("Running Group C3: pixelscan.net/bot-check")
+        all_results.append(await check_pixelscan(page))
+
+        # Group D: x.com/home reachability
         if include_x_home:
-            logger.info("Running Group C: x.com/home reachability")
+            logger.info("Running Group D: x.com/home reachability")
             x_result = await check_x_home(page)
             all_results.append(x_result)
 

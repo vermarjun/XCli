@@ -22,7 +22,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import pytest_asyncio
+
+
+@pytest.fixture(autouse=True)
+def disable_human_pace_for_integration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable humanized scroll timing during integration tests for hermetic timing.
+
+    Set XCLI_HUMAN_PACE=0 so capture_as_you_scroll and human_read_pause use
+    the original single-wheel-event / fixed-sleep behavior. This keeps tests
+    deterministic and fast without changing the production code path.
+    """
+    monkeypatch.setenv("XCLI_HUMAN_PACE", "0")
+
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

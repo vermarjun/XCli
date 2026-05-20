@@ -18,11 +18,11 @@ import pytest
 
 
 def test_browser_manager_default_viewport() -> None:
-    """Default viewport should be 1280x720."""
+    """Default viewport should be 1920x1080 (bumped for antibot heuristics)."""
     from xcli.core.browser import BrowserManager
 
     bm = BrowserManager(user_data_dir="/tmp/test_profile")
-    assert bm.viewport == {"width": 1280, "height": 720}
+    assert bm.viewport == {"width": 1920, "height": 1080}
 
 
 def test_browser_manager_custom_viewport() -> None:

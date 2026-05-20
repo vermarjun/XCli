@@ -576,10 +576,16 @@ class TestDoctorCommand:
         assert result.exit_code == 0
         assert "--channel" in _plain(result.output)
 
-    def test_status_help_no_headless_no_channel(self):
-        """status --help should NOT show --headless or --channel (utility command)."""
+    def test_status_help_shows_headless(self):
+        """status --help should show --headless (now defaults to visible mode)."""
         result = runner.invoke(app, ["status", "--help"])
         assert result.exit_code == 0
         plain = _plain(result.output)
-        assert "--headless" not in plain
-        assert "--channel" not in plain
+        assert "--headless" in plain
+
+    def test_doctor_help_shows_headless(self):
+        """doctor --help should show --headless (now defaults to visible mode)."""
+        result = runner.invoke(app, ["doctor", "--help"])
+        assert result.exit_code == 0
+        plain = _plain(result.output)
+        assert "--headless" in plain

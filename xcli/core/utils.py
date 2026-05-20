@@ -16,6 +16,7 @@ from typing import Awaitable, Callable
 from patchright.async_api import Page
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from xcli.core.human import HumanPaceConfig, human_read_pause, human_scroll_burst
 from xcli.scraping.selectors import MODAL_CLOSE_BTNS
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ async def capture_as_you_scroll(
     wheel_delta: int = 1500,
     pause_seconds: float = 1.0,
     skip_first_id: str | None = None,
+    human_pace: HumanPaceConfig | None = None,
 ) -> list[dict]:
     """Capture target records from a virtualized timeline by scrolling.
 
@@ -79,11 +81,21 @@ async def capture_as_you_scroll(
         pause_seconds:  Seconds to wait after each wheel event for DOM to update.
         skip_first_id:  If set, skip the record with this id (used in thread
                         mode to skip the OP tweet so only replies are returned).
+        human_pace:     HumanPaceConfig controlling scroll chunking and read
+                        pauses. Pass ``HumanPaceConfig(enabled=False)`` in
+                        tests for the original single-wheel-event behavior.
+                        Default ``None`` uses ``default_human_pace()`` which
+                        reads the ``XCLI_HUMAN_PACE`` environment variable.
     """
     seen: dict[str, dict] = {}  # id → record (insertion-ordered)
     stale = 0
 
-    vw = page.viewport_size or {"width": 1280, "height": 720}
+    # Resolve human pace config: use provided config, or read from env via factory.
+    from xcli.core.human import default_human_pace  # local import to avoid circular
+
+    pace_cfg = human_pace if human_pace is not None else default_human_pace()
+
+    vw = page.viewport_size or {"width": 1920, "height": 1080}
     cx, cy = vw["width"] // 2, vw["height"] // 2
     await page.mouse.move(cx, cy)
 
@@ -126,7 +138,7 @@ async def capture_as_you_scroll(
         else:
             stale = 0
 
-        await page.mouse.wheel(0, wheel_delta)
-        await asyncio.sleep(pause_seconds)
+        await human_scroll_burst(page, total_distance=wheel_delta, config=pace_cfg)
+        await human_read_pause(seconds=pause_seconds, intent="browse", config=pace_cfg)
 
     return list(seen.values())[:target]

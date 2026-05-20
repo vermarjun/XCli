@@ -9,6 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from xcli.core.human import HumanPaceConfig
+
+# Use disabled human pace for all capture_as_you_scroll calls in this test module
+# so assertions on exact wheel call counts remain deterministic.
+_NO_HUMAN_PACE = HumanPaceConfig(enabled=False)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -16,7 +22,7 @@ import pytest
 
 def _make_mock_page(viewport: dict | None = None) -> MagicMock:
     page = MagicMock()
-    page.viewport_size = viewport or {"width": 1280, "height": 720}
+    page.viewport_size = viewport or {"width": 1920, "height": 1080}
     page.mouse = MagicMock()
     page.mouse.move = AsyncMock()
     page.mouse.wheel = AsyncMock()
@@ -54,6 +60,7 @@ async def test_capture_as_you_scroll_collects_up_to_target() -> None:
         max_scrolls=10,
         max_stale=3,
         pause_seconds=0,
+        human_pace=_NO_HUMAN_PACE,
     )
 
     assert len(results) == 3
@@ -78,11 +85,13 @@ async def test_capture_as_you_scroll_stops_on_stale() -> None:
         max_scrolls=20,
         max_stale=3,
         pause_seconds=0,
+        human_pace=_NO_HUMAN_PACE,
     )
 
     # First call produces 2, rest are all stale → stops after max_stale=3 stale scrolls
     assert len(results) == 2
-    # mouse.wheel should have been called at most max_stale + 1 times
+    # mouse.wheel should have been called at most max_stale + 1 times (with disabled
+    # human pace, each scroll iteration calls mouse.wheel exactly once)
     assert page.mouse.wheel.call_count <= 4
 
 
@@ -104,6 +113,7 @@ async def test_capture_as_you_scroll_skips_first_id() -> None:
         max_stale=3,
         pause_seconds=0,
         skip_first_id="op",
+        human_pace=_NO_HUMAN_PACE,
     )
 
     ids = [r["id"] for r in results]
@@ -133,6 +143,7 @@ async def test_capture_as_you_scroll_handles_extract_fn_error() -> None:
         max_scrolls=5,
         max_stale=3,
         pause_seconds=0,
+        human_pace=_NO_HUMAN_PACE,
     )
 
     assert len(results) == 1
@@ -158,6 +169,7 @@ async def test_capture_as_you_scroll_respects_max_scrolls() -> None:
         max_scrolls=3,
         max_stale=100,
         pause_seconds=0,
+        human_pace=_NO_HUMAN_PACE,
     )
 
     # call_count == max_scrolls (3 iterations)
@@ -184,12 +196,13 @@ async def test_capture_as_you_scroll_uses_viewport_size() -> None:
         max_scrolls=1,
         max_stale=3,
         pause_seconds=0,
+        human_pace=_NO_HUMAN_PACE,
     )
 
     # Should succeed without error
     assert len(results) == 1
-    # mouse.move should have been called with center of default 1280x720
-    page.mouse.move.assert_called_with(640, 360)
+    # mouse.move should have been called with center of default 1920x1080 viewport
+    page.mouse.move.assert_called_with(960, 540)
 
 
 @pytest.mark.asyncio
@@ -213,6 +226,7 @@ async def test_capture_as_you_scroll_skips_records_without_id() -> None:
         max_scrolls=2,
         max_stale=3,
         pause_seconds=0,
+        human_pace=_NO_HUMAN_PACE,
     )
 
     ids = [r["id"] for r in results]

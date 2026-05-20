@@ -35,8 +35,8 @@ class TestDefaults:
 
     def test_viewport_default(self) -> None:
         config = get_config()
-        assert config.browser.viewport_width == 1280
-        assert config.browser.viewport_height == 720
+        assert config.browser.viewport_width == 1920
+        assert config.browser.viewport_height == 1080
 
     def test_nav_delay_default(self) -> None:
         config = get_config()

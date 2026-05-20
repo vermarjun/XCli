@@ -91,7 +91,7 @@ class BrowserManager:
         self.user_data_dir = str(Path(user_data_dir).expanduser())
         self.headless = headless
         self.slow_mo = slow_mo
-        self.viewport = viewport or {"width": 1280, "height": 720}
+        self.viewport = viewport or {"width": 1920, "height": 1080}
         self.user_agent = user_agent
         self.channel = channel  # None → bundled Chromium; "chrome" → installed Chrome
         self.launch_options = launch_options
@@ -121,10 +121,25 @@ class BrowserManager:
             context_options: dict[str, Any] = {
                 "headless": self.headless,
                 "slow_mo": self.slow_mo,
-                "viewport": self.viewport,
                 **self.launch_options,
                 "locale": "en-US",
             }
+
+            if self.headless:
+                # Headless: explicit viewport, bumped to 1920x1080 default.
+                context_options["viewport"] = self.viewport
+            else:
+                # Headed: let the OS window size drive the page size.
+                # Combined with --start-maximized, gives a real maximized window.
+                context_options["no_viewport"] = True
+                args = list(context_options.get("args", []))
+                if "--start-maximized" not in args:
+                    args.append("--start-maximized")
+                # Also nudge the initial window size so non-maximizing window managers
+                # (some Linux WMs) still get a sensible starting size.
+                if not any(a.startswith("--window-size=") for a in args):
+                    args.append(f"--window-size={self.viewport['width']},{self.viewport['height']}")
+                context_options["args"] = args
 
             if self.user_agent:
                 context_options["user_agent"] = self.user_agent
