@@ -1,0 +1,40 @@
+[project]
+name = "xcli"
+version = "0.1.0"
+description = "Stealth X (Twitter) CLI — authenticated DOM scraping via Patchright"
+requires-python = ">=3.12,<3.15"
+readme = "readme.md"
+dependencies = [
+    "patchright>=1.40,<2",
+    "typer>=0.12",
+    "rich>=13",
+    "python-dotenv>=1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5",
+    "aiohttp>=3.9",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+xcli = "xcli.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = []
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

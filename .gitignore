@@ -1,2 +1,36 @@
 inspi/
 plan/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Build & distribution
+*.egg-info/
+dist/
+build/
+
+# Test & coverage
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Output files (root-level only — do NOT ignore tests/**/*.json)
+/feed.json
+/profile.json
+/*.local.json
+
+# Test output directories
+tests/**/output/
+
+# Environment secrets
+.env
+
