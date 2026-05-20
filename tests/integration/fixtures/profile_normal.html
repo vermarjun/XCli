@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<!--
+  profile_normal.html — minimal X.com user profile page fixture.
+
+  Used by Phase 2 tests; defined now for symmetry and auth-detection tests.
+
+  Key testids:
+  - SideNav_AccountSwitcher_Button  : logged-in signal
+  - primaryColumn                    : page-ready signal
+  - UserName                         : profile name/handle
+  - UserDescription                  : bio
+  - UserUrl                          : website
+  - UserLocation                     : location
+  - UserJoinDate                     : join date
+  - tweet (3 posts in timeline)
+
+  Auth: authenticated page (has SideNav + primaryColumn)
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Example User (@exampleuser) / X</title>
+</head>
+<body>
+  <!-- Authenticated nav -->
+  <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser"></div>
+
+  <div data-testid="primaryColumn">
+    <!-- Profile header -->
+    <div data-testid="UserName">
+      <span>Example User</span>
+      <span>@exampleuser</span>
+    </div>
+    <div data-testid="UserDescription">
+      This is the bio. Visit
+      <a href="https://t.co/abc" data-expanded-url="https://example.com" aria-label="https://example.com">https://t.co/abc</a>
+      for more.
+    </div>
+    <div data-testid="UserUrl">
+      <a href="https://example.com">example.com</a>
+    </div>
+    <div data-testid="UserLocation">San Francisco, CA</div>
+    <div data-testid="UserJoinDate">Joined March 2015</div>
+    <a href="/exampleuser/followers">1,234 Followers</a>
+    <a href="/exampleuser/following">567 Following</a>
+
+    <!-- Timeline posts -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-exampleuser"></div>
+        <div data-testid="User-Name">
+          <span>Example User</span>
+          <span>@exampleuser</span>
+        </div>
+        <div data-testid="tweetText">First post on the profile page.</div>
+        <time datetime="2026-05-19T08:00:00.000Z">8:00 AM</time>
+        <a href="/exampleuser/status/300">May 19</a>
+        <div data-testid="reply" aria-label="2 replies"></div>
+        <div data-testid="retweet" aria-label="1 repost"></div>
+        <div data-testid="like" aria-label="20 likes"></div>
+        <div data-testid="bookmark" aria-label="3 bookmarks"></div>
+      </article>
+    </div>
+
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-exampleuser"></div>
+        <div data-testid="User-Name">
+          <span>Example User</span>
+          <span>@exampleuser</span>
+        </div>
+        <div data-testid="tweetText">Second post with some interesting content.</div>
+        <time datetime="2026-05-18T10:00:00.000Z">10:00 AM</time>
+        <a href="/exampleuser/status/301">May 18</a>
+        <div data-testid="reply" aria-label="0 replies"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="8 likes"></div>
+        <div data-testid="bookmark" aria-label="1 bookmark"></div>
+      </article>
+    </div>
+
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-exampleuser"></div>
+        <div data-testid="User-Name">
+          <span>Example User</span>
+          <span>@exampleuser</span>
+        </div>
+        <div data-testid="tweetText">Third post from the profile timeline.</div>
+        <time datetime="2026-05-17T12:00:00.000Z">Noon</time>
+        <a href="/exampleuser/status/302">May 17</a>
+        <div data-testid="reply" aria-label="1 reply"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="4 likes"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+  </div><!-- /primaryColumn -->
+</body>
+</html>

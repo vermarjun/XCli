@@ -9,6 +9,9 @@ Key differences from LinkedIn:
 - Rate-limit signal: /account/access URL OR "Something went wrong" body + no primaryColumn
 - No remember-me prompt (X does not use that UI pattern)
 - No resolve_remember_me_prompt helper
+
+All selector constants are imported from xcli.scraping.selectors — that module
+is the single source of truth.
 """
 
 import asyncio
@@ -20,49 +23,17 @@ from patchright.async_api import Page
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from xcli.exceptions import AuthenticationError, RateLimitError
+from xcli.scraping.selectors import (
+    AUTH_BARRIER_TEXT_MARKERS,
+    AUTH_BLOCKER_URL_PATHS,
+    AUTHED_URL_SEGMENTS,
+    LOGGED_IN_SELECTORS,
+    LOGIN_TITLE_PATTERNS,
+    PRIMARY_COLUMN,
+    SOFT_BLOCK_BODY_MARKERS,
+)
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Constants (inline here for Phase 0; Phase 1 will centralize in selectors.py)
-# ---------------------------------------------------------------------------
-
-_AUTH_BLOCKER_URL_PATHS = (
-    "/i/flow/login",
-    "/login",
-    "/account/access",
-    "/i/flow/signup",
-)
-
-_LOGIN_TITLE_PATTERNS = (
-    "log in to x",
-    "log in to twitter",
-    "sign in to x",
-    "sign in to twitter",
-)
-
-_AUTH_BARRIER_TEXT_MARKERS = (
-    ("Don't miss what's happening", "Log in"),
-    ("Sign up to continue",),
-)
-
-_SOFT_BLOCK_BODY_MARKERS = (
-    "Something went wrong",
-    "Try reloading",
-    "Rate limit exceeded",
-)
-
-# Selector for the primary content column — absence signals a soft-block page
-_PRIMARY_COLUMN_SELECTOR = '[data-testid="primaryColumn"]'
-
-# Logged-in navigation signals (structural, not text-dependent)
-_LOGGED_IN_SELECTORS = (
-    '[data-testid="SideNav_AccountSwitcher_Button"]',
-    '[data-testid="AppTabBar_Profile_Link"]',
-)
-
-# Authenticated-only URL segments (URL-based fallback for is_logged_in)
-_AUTHED_URL_SEGMENTS = ("/home", "/notifications", "/messages")
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +86,7 @@ async def is_logged_in(page: Page) -> bool:
 
         # Tier 2: selector check (primary signal)
         has_nav = False
-        for selector in _LOGGED_IN_SELECTORS:
+        for selector in LOGGED_IN_SELECTORS:
             try:
                 count = await page.locator(selector).count()
                 if count > 0:
@@ -125,7 +96,7 @@ async def is_logged_in(page: Page) -> bool:
                 pass
 
         # Tier 3: URL-based fallback (authenticated-only pages)
-        is_authed_page = any(seg in current_url for seg in _AUTHED_URL_SEGMENTS)
+        is_authed_page = any(seg in current_url for seg in AUTHED_URL_SEGMENTS)
 
         if not is_authed_page:
             return has_nav
@@ -176,7 +147,7 @@ async def _detect_auth_barrier(page: Page, *, include_body_text: bool) -> str | 
             title = (await page.title()).strip().lower()
         except Exception:
             title = ""
-        if any(pattern in title for pattern in _LOGIN_TITLE_PATTERNS):
+        if any(pattern in title for pattern in LOGIN_TITLE_PATTERNS):
             return f"login title: {title}"
 
         if not include_body_text:
@@ -190,7 +161,7 @@ async def _detect_auth_barrier(page: Page, *, include_body_text: bool) -> str | 
             body_text = ""
 
         normalized = re.sub(r"\s+", " ", body_text).strip()
-        for marker_group in _AUTH_BARRIER_TEXT_MARKERS:
+        for marker_group in AUTH_BARRIER_TEXT_MARKERS:
             if all(marker in normalized for marker in marker_group):
                 return f"auth barrier text: {' + '.join(marker_group)}"
 
@@ -233,12 +204,12 @@ async def detect_rate_limit(page: Page) -> None:
         )
 
     try:
-        has_primary_column = await page.locator(_PRIMARY_COLUMN_SELECTOR).count() > 0
+        has_primary_column = await page.locator(PRIMARY_COLUMN).count() > 0
         if has_primary_column:
             return  # Normal page with content; skip heuristic
 
         body_text = await page.locator("body").inner_text(timeout=2000)
-        if body_text and any(marker in body_text for marker in _SOFT_BLOCK_BODY_MARKERS):
+        if body_text and any(marker in body_text for marker in SOFT_BLOCK_BODY_MARKERS):
             raise RateLimitError(
                 "X soft-block detected ('Something went wrong' / rate limit message). "
                 "Wait before retrying.",
@@ -295,9 +266,9 @@ async def wait_for_manual_login(page: Page, timeout: int = 300000) -> None:
 def _is_auth_blocker_url(url: str) -> bool:
     """Return True only for real X auth routes, not arbitrary slug substrings."""
     path = urlparse(url).path or "/"
-    if path in _AUTH_BLOCKER_URL_PATHS:
+    if path in AUTH_BLOCKER_URL_PATHS:
         return True
     return any(
         path == f"{pattern}/" or path.startswith(f"{pattern}/")
-        for pattern in _AUTH_BLOCKER_URL_PATHS
+        for pattern in AUTH_BLOCKER_URL_PATHS
     )

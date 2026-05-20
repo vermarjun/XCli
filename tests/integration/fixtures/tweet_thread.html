@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!--
+  tweet_thread.html — synthetic X.com tweet thread fixture for integration tests.
+
+  Structure:
+  - First article = OP tweet (id 100, user1). Extractor should skip this when
+    fetching thread comments (skip_first_id = "100").
+  - Articles 200–204 = replies.
+  - One "Show more replies" placeholder row (no tweetText, no media, tiny innerText).
+
+  Key testids:
+  - primaryColumn  : page-ready signal
+  - tweet          : article wrapper
+  - tweetText      : tweet body text
+  - User-Name      : author block
+  - UserAvatar-Container-* : username source
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User One on X</title>
+</head>
+<body>
+  <!-- Authenticated nav -->
+  <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser"></div>
+
+  <div data-testid="primaryColumn">
+
+    <!-- ============================================================
+         OP tweet (id=100, user=user1) — skip_first_id target
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user1"></div>
+        <div data-testid="User-Name">
+          <span>User One</span>
+          <span>@user1</span>
+        </div>
+        <div data-testid="tweetText">Hello world! This is the original tweet.</div>
+        <time datetime="2026-05-19T09:00:00.000Z">9:00 AM</time>
+        <a href="/user1/status/100">May 19</a>
+        <div data-testid="reply" aria-label="5 replies"></div>
+        <div data-testid="retweet" aria-label="2 reposts"></div>
+        <div data-testid="like" aria-label="30 likes"></div>
+        <div data-testid="bookmark" aria-label="1 bookmark"></div>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Reply 200 by replier1
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-replier1"></div>
+        <div data-testid="User-Name">
+          <span>Replier One</span>
+          <span>@replier1</span>
+        </div>
+        <div data-testid="tweetText">Great tweet! I totally agree.</div>
+        <time datetime="2026-05-19T09:05:00.000Z">9:05 AM</time>
+        <a href="/replier1/status/200">May 19</a>
+        <div data-testid="reply" aria-label="1 reply"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="5 likes"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Reply 201 by replier2
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-replier2"></div>
+        <div data-testid="User-Name">
+          <span>Replier Two</span>
+          <span>@replier2</span>
+        </div>
+        <div data-testid="tweetText">Thanks for sharing this!</div>
+        <time datetime="2026-05-19T09:10:00.000Z">9:10 AM</time>
+        <a href="/replier2/status/201">May 19</a>
+        <div data-testid="reply" aria-label="0 replies"></div>
+        <div data-testid="retweet" aria-label="1 repost"></div>
+        <div data-testid="like" aria-label="8 likes"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Reply 202 by replier3
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-replier3"></div>
+        <div data-testid="User-Name">
+          <span>Replier Three</span>
+          <span>@replier3</span>
+        </div>
+        <div data-testid="tweetText">Interesting perspective. Here is my take on it.</div>
+        <time datetime="2026-05-19T09:15:00.000Z">9:15 AM</time>
+        <a href="/replier3/status/202">May 19</a>
+        <div data-testid="reply" aria-label="2 replies"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="12 likes"></div>
+        <div data-testid="bookmark" aria-label="1 bookmark"></div>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Reply 203 by replier4
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-replier4"></div>
+        <div data-testid="User-Name">
+          <span>Replier Four</span>
+          <span>@replier4</span>
+        </div>
+        <div data-testid="tweetText">First time seeing this. Wow!</div>
+        <time datetime="2026-05-19T09:20:00.000Z">9:20 AM</time>
+        <a href="/replier4/status/203">May 19</a>
+        <div data-testid="reply" aria-label="0 replies"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="3 likes"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         "Show more replies" placeholder row — no tweetText, no media
+         This should be filtered by the placeholder detection logic.
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <!-- Intentionally no tweetText, no media — just a tiny navigation element -->
+        <a href="/user1/status/100">Show more replies</a>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Reply 204 by replier5 (after the placeholder)
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-replier5"></div>
+        <div data-testid="User-Name">
+          <span>Replier Five</span>
+          <span>@replier5</span>
+        </div>
+        <div data-testid="tweetText">One more reply from replier five here.</div>
+        <time datetime="2026-05-19T09:25:00.000Z">9:25 AM</time>
+        <a href="/replier5/status/204">May 19</a>
+        <div data-testid="reply" aria-label="0 replies"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="1 like"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+  </div><!-- /primaryColumn -->
+</body>
+</html>

@@ -34,6 +34,7 @@ from rich.console import Console
 
 from xcli.exceptions import (
     AuthenticationError,
+    RateLimitError,
     XCliError,
 )
 
@@ -192,22 +193,11 @@ async def _status_cmd() -> dict:
         browser = await get_or_create_browser(headless=True)
         authed = await is_logged_in(browser.page)
 
-        # Try to extract handle from page URL or title
+        # Try to extract handle from sidebar account switcher
         try:
-            url = browser.page.url
-            if "/home" in url:
-                # Extract from sidebar account switcher aria-label if available
-                _js = (
-                    "() => {"
-                    "  const el = document.querySelector("
-                    "    '[data-testid=\"SideNav_AccountSwitcher_Button\"]'"
-                    "  );"
-                    "  return el ? (el.getAttribute('aria-label') || '') : '';"
-                    "}"
-                )
-                label = await browser.page.evaluate(_js)
-                if isinstance(label, str) and "@" in label:
-                    handle = label.split("@")[-1].split()[0].strip("@")
+            from xcli.scraping.extractor import read_authenticated_handle
+
+            handle = await read_authenticated_handle(browser.page)
         except Exception:
             pass
 
@@ -230,7 +220,7 @@ async def _status_cmd() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# feed (Phase 1 stub)
+# feed
 # ---------------------------------------------------------------------------
 
 
@@ -243,10 +233,41 @@ def feed(
 ) -> None:
     """Fetch top N posts from your home feed with top Y comments each.
 
-    Not implemented yet (Phase 1).
+    Requires an authenticated session. Run ``xcli login`` first if needed.
+
+    Output is JSON (stdout) unless ``--output`` is specified.
+    Exit codes: 0 ok, 2 auth needed, 3 rate-limited, 1 other error.
     """
-    console.print("[yellow]xcli feed[/yellow] is not implemented yet (Phase 1).")
-    raise typer.Exit(code=1)
+    _setup_logging()
+    try:
+        result = asyncio.run(_feed_cmd(count, comments_per, not no_headless))
+        payload = json.dumps(result, indent=2, ensure_ascii=False)
+        if output:
+            output.write_text(payload + "\n", encoding="utf-8")
+            console.print(f"[green]Feed written to[/green] {output}")
+        else:
+            typer.echo(payload)
+    except AuthenticationError as e:
+        console.print(f"[red]Authentication required:[/red] {e}")
+        console.print("Run [bold]xcli login[/bold] to establish a session.")
+        raise typer.Exit(code=2) from e
+    except RateLimitError as e:
+        console.print(
+            f"[yellow]Rate limited:[/yellow] {e}  (suggested wait: {e.suggested_wait_seconds}s)"
+        )
+        raise typer.Exit(code=3) from e
+    except XCliError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=e.exit_code) from e
+    except Exception as e:
+        console.print(f"[red]Unexpected error:[/red] {e}")
+        raise typer.Exit(code=1) from e
+
+
+async def _feed_cmd(count: int, comments_per: int, headless: bool) -> dict:
+    from xcli.tools.feed import run
+
+    return await run(count, comments_per, headless=headless)
 
 
 # ---------------------------------------------------------------------------

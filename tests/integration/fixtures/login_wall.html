@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!--
+  login_wall.html — simulates X.com auth barrier page.
+
+  Signals used by detect_auth_barrier / is_logged_in:
+  - Title: "Log in to X" → triggers LOGIN_TITLE_PATTERNS
+  - [data-testid="loginButton"] → triggers LOGIN_BUTTON check
+  - No SideNav_AccountSwitcher_Button → is_logged_in returns False
+  - No primaryColumn → detect_rate_limit skips body check
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Log in to X</title>
+</head>
+<body>
+  <div>
+    <h1>Don't miss what's happening</h1>
+    <p>People on X are the first to know.</p>
+    <button data-testid="loginButton">Log in</button>
+    <button data-testid="signupButton">Sign up</button>
+  </div>
+</body>
+</html>

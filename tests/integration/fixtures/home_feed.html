@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<!--
+  home_feed.html — synthetic X.com home feed fixture for integration tests.
+
+  Key testids used (from selectors.py):
+  - primaryColumn            : page-ready signal
+  - tweet                    : article wrapper
+  - tweetText                : tweet body text
+  - User-Name                : author name/handle block
+  - UserAvatar-Container-*   : most reliable username source
+  - socialContext            : repost indicator
+  - placementTracking        : ad marker (structural, locale-independent)
+
+  IDs: /user1/status/100 through /user5/status/104
+  - Post 100: normal tweet (user1)
+  - Post 101: repost by user2 of user3 content
+  - Post 102: tweet with media (user3)
+  - Post 103: AD — has placementTracking wrapper
+  - Post 104: tweet with links and verified badge (user4)
+  - Posts 105-107: additional tweets to pad count for scroll testing (user5)
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Home / X</title>
+</head>
+<body>
+  <!-- Authenticated nav (signals is_logged_in) -->
+  <div data-testid="SideNav_AccountSwitcher_Button" aria-label="Account switcher @testuser">
+    @testuser
+  </div>
+
+  <!-- Primary content column (page-ready signal) -->
+  <div data-testid="primaryColumn">
+
+    <!-- ============================================================
+         Post 100 — Normal tweet by user1
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user1"></div>
+        <div data-testid="User-Name">
+          <span>User One</span>
+          <span>@user1</span>
+        </div>
+        <div data-testid="tweetText">Hello world! This is the first test tweet.</div>
+        <time datetime="2026-05-19T09:00:00.000Z">9:00 AM</time>
+        <a href="/user1/status/100">May 19</a>
+        <div data-testid="reply" aria-label="42 replies"></div>
+        <div data-testid="retweet" aria-label="7 reposts"></div>
+        <div data-testid="like" aria-label="123 likes"></div>
+        <div data-testid="bookmark" aria-label="5 bookmarks"></div>
+        <a href="/user1/status/100/analytics" aria-label="1.2K views">Views</a>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Post 101 — Repost by user2 of user3 content
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <div data-testid="socialContext">user2 Reposted</div>
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user3"></div>
+        <div data-testid="User-Name">
+          <span>User Three</span>
+          <span>@user3</span>
+        </div>
+        <div data-testid="tweetText">This tweet was reposted from user3.</div>
+        <time datetime="2026-05-19T08:00:00.000Z">8:00 AM</time>
+        <a href="/user3/status/101">May 19</a>
+        <div data-testid="reply" aria-label="10 replies"></div>
+        <div data-testid="retweet" aria-label="50 reposts"></div>
+        <div data-testid="like" aria-label="500 likes"></div>
+        <div data-testid="bookmark" aria-label="20 bookmarks"></div>
+        <a href="/user3/status/101/analytics" aria-label="5K views">Views</a>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Post 102 — Tweet with photo media (user3)
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user3"></div>
+        <div data-testid="User-Name">
+          <span>User Three</span>
+          <span>@user3</span>
+        </div>
+        <div data-testid="tweetText">Check out this photo!</div>
+        <time datetime="2026-05-19T07:30:00.000Z">7:30 AM</time>
+        <a href="/user3/status/102">May 19</a>
+        <div data-testid="tweetPhoto">
+          <img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt="photo">
+        </div>
+        <div data-testid="reply" aria-label="25 replies"></div>
+        <div data-testid="retweet" aria-label="88 reposts"></div>
+        <div data-testid="like" aria-label="1.1K likes"></div>
+        <div data-testid="bookmark" aria-label="33 bookmarks"></div>
+        <a href="/user3/status/102/analytics" aria-label="10K views">Views</a>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Post 103 — AD (has placementTracking, must be filtered out)
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <div data-testid="placementTracking">
+        <article data-testid="tweet" role="article">
+          <div data-testid="UserAvatar-Container-advertiser1"></div>
+          <div data-testid="User-Name">
+            <span>Advertiser Inc</span>
+            <span>@advertiser1</span>
+          </div>
+          <div data-testid="tweetText">Buy our product now! Best deal ever. Ad</div>
+          <time datetime="2026-05-19T06:00:00.000Z">6:00 AM</time>
+          <a href="/advertiser1/status/103">May 19</a>
+          <div data-testid="reply" aria-label="0 replies"></div>
+          <div data-testid="retweet" aria-label="0 reposts"></div>
+          <div data-testid="like" aria-label="1 like"></div>
+          <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+        </article>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         Post 104 — Tweet with external link, verified badge (user4)
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user4"></div>
+        <div data-testid="User-Name">
+          <span>User Four</span>
+          <span>@user4</span>
+          <svg aria-label="Verified account" viewBox="0 0 22 22"><path/></svg>
+        </div>
+        <div data-testid="tweetText">
+          Read my latest post:
+          <a href="https://t.co/abc123" data-expanded-url="https://example.com/article" aria-label="https://example.com/article">https://t.co/abc123</a>
+        </div>
+        <time datetime="2026-05-19T05:00:00.000Z">5:00 AM</time>
+        <a href="/user4/status/104">May 19</a>
+        <div data-testid="reply" aria-label="8 replies"></div>
+        <div data-testid="retweet" aria-label="15 reposts"></div>
+        <div data-testid="like" aria-label="200 likes"></div>
+        <div data-testid="bookmark" aria-label="10 bookmarks"></div>
+        <a href="/user4/status/104/analytics" aria-label="2.5K views">Views</a>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         Posts 105–107 — Additional tweets for scroll padding (user5)
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user5"></div>
+        <div data-testid="User-Name"><span>User Five</span><span>@user5</span></div>
+        <div data-testid="tweetText">Tweet number 105.</div>
+        <time datetime="2026-05-19T04:00:00.000Z">4:00 AM</time>
+        <a href="/user5/status/105">May 19</a>
+        <div data-testid="reply" aria-label="3 replies"></div>
+        <div data-testid="retweet" aria-label="2 reposts"></div>
+        <div data-testid="like" aria-label="15 likes"></div>
+        <div data-testid="bookmark" aria-label="1 bookmark"></div>
+      </article>
+    </div>
+
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user5"></div>
+        <div data-testid="User-Name"><span>User Five</span><span>@user5</span></div>
+        <div data-testid="tweetText">Tweet number 106 with some more content here.</div>
+        <time datetime="2026-05-19T03:00:00.000Z">3:00 AM</time>
+        <a href="/user5/status/106">May 19</a>
+        <div data-testid="reply" aria-label="1 reply"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="7 likes"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-user5"></div>
+        <div data-testid="User-Name"><span>User Five</span><span>@user5</span></div>
+        <div data-testid="tweetText">Tweet number 107.</div>
+        <time datetime="2026-05-19T02:00:00.000Z">2:00 AM</time>
+        <a href="/user5/status/107">May 19</a>
+        <div data-testid="reply" aria-label="0 replies"></div>
+        <div data-testid="retweet" aria-label="0 reposts"></div>
+        <div data-testid="like" aria-label="3 likes"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+  </div><!-- /primaryColumn -->
+</body>
+</html>

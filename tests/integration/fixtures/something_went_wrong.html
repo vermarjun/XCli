@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<!--
+  something_went_wrong.html — simulates X.com soft-block / rate-limit page.
+
+  Signals used by detect_rate_limit:
+  - No primaryColumn → triggers body-text heuristic
+  - Body contains "Something went wrong" AND "Try reloading" → RateLimitError
+  - No SideNav_AccountSwitcher_Button → is_logged_in returns False
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>X</title>
+</head>
+<body>
+  <div>
+    <h1>Something went wrong. Try reloading.</h1>
+    <button role="button">Retry</button>
+  </div>
+</body>
+</html>
