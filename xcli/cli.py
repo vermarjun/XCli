@@ -335,18 +335,78 @@ async def _profile_cmd(username: str, posts: int, comments_per: int, headless: b
 
 
 # ---------------------------------------------------------------------------
-# doctor (Phase 3 stub)
+# doctor (Phase 3)
 # ---------------------------------------------------------------------------
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    skip_x: bool = typer.Option(False, "--skip-x", help="Skip the x.com reachability check."),
+    json_output: bool = typer.Option(False, "--json", help="Write JSON summary to stdout."),
+) -> None:
     """Run stealth fingerprint checks and print a PASS/FAIL report.
 
-    Not implemented yet (Phase 3).
+    Runs:
+      - bot.sannysoft.com fingerprint detection
+      - creepjs trust score (advisory)
+      - x.com/home reachability (if logged in)
+
+    Exit 0 if all critical checks pass, 1 otherwise.
+    JSON output (--json) goes to stdout; the human-readable table goes to stderr.
     """
-    console.print("[yellow]xcli doctor[/yellow] is not implemented yet (Phase 3).")
-    raise typer.Exit(code=1)
+    try:
+        results = asyncio.run(_doctor_cmd(skip_x=skip_x))
+    except Exception as e:
+        console.print(f"[red]doctor failed:[/red] {e}")
+        raise typer.Exit(code=1) from e
+
+    if json_output:
+        from dataclasses import asdict
+
+        typer.echo(json.dumps([asdict(r) for r in results], indent=2, default=str))
+    else:
+        _render_doctor_table(results)
+
+    if any(r.status.value == "fail" and r.critical for r in results):
+        raise typer.Exit(code=1)
+
+
+async def _doctor_cmd(*, skip_x: bool) -> list:
+    from xcli.checks import run_all_checks
+
+    return await run_all_checks(include_x_home=not skip_x)
+
+
+def _render_doctor_table(results: list) -> None:
+    """Render a rich.Table of CheckResults to stderr."""
+    from rich.table import Table
+
+    from xcli.checks import CheckStatus
+
+    _STATUS_COLOR = {
+        CheckStatus.PASS: "green",
+        CheckStatus.WARN: "yellow",
+        CheckStatus.FAIL: "red",
+        CheckStatus.SKIP: "dim",
+    }
+
+    table = Table(title="xcli doctor — stealth check results", show_lines=True)
+    table.add_column("Name", style="bold", no_wrap=True)
+    table.add_column("Category")
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Detail", overflow="fold")
+
+    for r in results:
+        color = _STATUS_COLOR.get(r.status, "white")
+        status_text = f"[{color}]{r.status.value.upper()}[/{color}]"
+        if r.critical and r.status.value == "fail":
+            status_text += " [red bold]CRITICAL[/red bold]"
+        table.add_row(r.name, r.category, status_text, r.detail)
+
+    # Table → stderr so JSON piping (--json) stays clean
+    from rich.console import Console as _Console
+
+    _Console(stderr=True).print(table)
 
 
 # ---------------------------------------------------------------------------
