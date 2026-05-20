@@ -5,3 +5,33 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: no-stray-x-selectors
+        name: No stray X data-testid selectors outside selectors.py
+        language: system
+        files: '^xcli/.*\.py$'
+        exclude: '^xcli/(scraping/selectors|checks)\.py$'
+        entry: >-
+          bash -c '
+            if grep -nE "\[data-testid=" -- "$@" 2>/dev/null; then
+              echo "ERROR: Found data-testid selector outside xcli/scraping/selectors.py (or checks.py). Centralize it."
+              exit 1
+            fi
+            exit 0
+          ' --
+
+      - id: no-stray-x-classnames
+        name: No X auto-generated class selectors (r-*, css-*) outside selectors.py
+        language: system
+        files: '^xcli/.*\.py$'
+        exclude: '^xcli/scraping/selectors\.py$'
+        entry: >-
+          bash -c '
+            if grep -nE "\.(r-[0-9a-z]+|css-[a-z0-9]+)" -- "$@" 2>/dev/null; then
+              echo "ERROR: Found X auto-generated class selector (r-* or css-*). These rotate per deploy — remove or centralize."
+              exit 1
+            fi
+            exit 0
+          ' --

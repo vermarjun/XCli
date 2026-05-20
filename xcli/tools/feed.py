@@ -22,6 +22,7 @@ async def run(
     count: int,
     comments_per: int,
     headless: bool = True,
+    jitter_pct: float | None = None,
 ) -> dict[str, Any]:
     """Fetch top ``count`` posts from the authenticated user's home feed.
 
@@ -29,6 +30,7 @@ async def run(
         count:        Number of posts to return (ads excluded).
         comments_per: Number of top reply comments to fetch per post.
         headless:     Whether to run the browser in headless mode.
+        jitter_pct:   Fractional jitter on nav delays (None → use config default).
 
     Returns:
         Feed dict matching plan §4.1 schema:
@@ -40,8 +42,13 @@ async def run(
         RateLimitError: If X hard-blocks the session at /account/access.
         XCliError: For other xcli-level failures.
     """
+    from xcli.config import get_config
+
+    if jitter_pct is None:
+        jitter_pct = get_config().browser.jitter_pct
+
     async with _lock:
         browser = await get_or_create_browser(headless=headless)
         await ensure_authenticated()
-        extractor = XExtractor(browser.page)
+        extractor = XExtractor(browser.page, jitter_pct=jitter_pct)
         return await extractor.fetch_feed(count, comments_per)

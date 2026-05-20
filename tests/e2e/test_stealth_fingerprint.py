@@ -73,9 +73,9 @@ async def test_sannysoft_returns_rows():
         await bm.close()
 
     # Should have at least the 6 critical rows + 1 summary
-    assert len(results) >= 7, (
-        f"Expected at least 7 results (6 critical + summary), got {len(results)}"
-    )
+    assert (
+        len(results) >= 7
+    ), f"Expected at least 7 results (6 critical + summary), got {len(results)}"
 
 
 # ---------------------------------------------------------------------------
@@ -113,9 +113,10 @@ async def test_creepjs_has_score():
         await bm.close()
 
     # WARN is acceptable (score not found); FAIL means error or is_bot
-    assert result.status in (CheckStatus.PASS, CheckStatus.WARN), (
-        f"creepjs check failed unexpectedly: {result.detail}"
-    )
+    assert result.status in (
+        CheckStatus.PASS,
+        CheckStatus.WARN,
+    ), f"creepjs check failed unexpectedly: {result.detail}"
     if result.evidence:
         trust_score = result.evidence.get("trust_score")
         # If score was found, it should be a sensible value
@@ -149,6 +150,6 @@ async def test_x_home_reaches_primary_column():
     if result.status == CheckStatus.SKIP:
         pytest.skip(result.detail)
 
-    assert result.status == CheckStatus.PASS, (
-        f"x.com/home reachability check failed: {result.detail}\nEvidence: {result.evidence}"
-    )
+    assert (
+        result.status == CheckStatus.PASS
+    ), f"x.com/home reachability check failed: {result.detail}\nEvidence: {result.evidence}"

@@ -230,6 +230,13 @@ def feed(
     comments_per: int = typer.Option(3, "--comments-per", "-y", min=0, max=50),
     output: Path | None = typer.Option(None, "--output", "-o"),
     no_headless: bool = typer.Option(False, "--no-headless"),
+    jitter_pct: float | None = typer.Option(
+        None,
+        "--jitter-pct",
+        min=0.0,
+        max=1.0,
+        help="Fractional jitter on nav delays (0.0–1.0). Overrides XCLI_JITTER_PCT.",
+    ),
 ) -> None:
     """Fetch top N posts from your home feed with top Y comments each.
 
@@ -240,7 +247,7 @@ def feed(
     """
     _setup_logging()
     try:
-        result = asyncio.run(_feed_cmd(count, comments_per, not no_headless))
+        result = asyncio.run(_feed_cmd(count, comments_per, not no_headless, jitter_pct))
         payload = json.dumps(result, indent=2, ensure_ascii=False)
         if output:
             output.write_text(payload + "\n", encoding="utf-8")
@@ -264,10 +271,12 @@ def feed(
         raise typer.Exit(code=1) from e
 
 
-async def _feed_cmd(count: int, comments_per: int, headless: bool) -> dict:
+async def _feed_cmd(
+    count: int, comments_per: int, headless: bool, jitter_pct: float | None = None
+) -> dict:
     from xcli.tools.feed import run
 
-    return await run(count, comments_per, headless=headless)
+    return await run(count, comments_per, headless=headless, jitter_pct=jitter_pct)
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +291,13 @@ def profile(
     comments_per: int = typer.Option(3, "--comments-per", "-y", min=0, max=50),
     output: Path | None = typer.Option(None, "--output", "-o"),
     no_headless: bool = typer.Option(False, "--no-headless"),
+    jitter_pct: float | None = typer.Option(
+        None,
+        "--jitter-pct",
+        min=0.0,
+        max=1.0,
+        help="Fractional jitter on nav delays (0.0–1.0). Overrides XCLI_JITTER_PCT.",
+    ),
 ) -> None:
     """Deep-research a user's profile + their top N posts + Y comments each.
 
@@ -292,7 +308,9 @@ def profile(
     """
     _setup_logging()
     try:
-        result = asyncio.run(_profile_cmd(username, posts, comments_per, not no_headless))
+        result = asyncio.run(
+            _profile_cmd(username, posts, comments_per, not no_headless, jitter_pct)
+        )
         payload = json.dumps(result, indent=2, ensure_ascii=False)
         if output:
             output.write_text(payload + "\n", encoding="utf-8")
@@ -328,10 +346,16 @@ def profile(
         raise typer.Exit(code=1) from e
 
 
-async def _profile_cmd(username: str, posts: int, comments_per: int, headless: bool) -> dict:
+async def _profile_cmd(
+    username: str,
+    posts: int,
+    comments_per: int,
+    headless: bool,
+    jitter_pct: float | None = None,
+) -> dict:
     from xcli.tools.profile import run
 
-    return await run(username, posts, comments_per, headless=headless)
+    return await run(username, posts, comments_per, headless=headless, jitter_pct=jitter_pct)
 
 
 # ---------------------------------------------------------------------------

@@ -42,6 +42,7 @@ class BrowserConfig:
     default_timeout: int = 5000  # ms for page operations
     chrome_path: str | None = None
     user_data_dir: str = "~/.xcli/profile"
+    jitter_pct: float = 0.2  # fractional jitter applied to nav delays (0.0 = off, 1.0 = ±100%)
 
     def validate(self) -> None:
         """Validate browser configuration values."""
@@ -55,6 +56,10 @@ class BrowserConfig:
             raise ConfigurationError(
                 f"viewport dimensions must be positive, got "
                 f"{self.viewport_width}x{self.viewport_height}"
+            )
+        if not (0.0 <= self.jitter_pct <= 1.0):
+            raise ConfigurationError(
+                f"jitter_pct must be between 0.0 and 1.0, got {self.jitter_pct}"
             )
         if self.chrome_path:
             chrome = Path(self.chrome_path)
@@ -146,3 +151,9 @@ def _apply_env(config: AppConfig) -> None:
 
     if v := os.environ.get("XCLI_CHROME_PATH"):
         config.browser.chrome_path = v
+
+    if v := os.environ.get("XCLI_JITTER_PCT"):
+        try:
+            config.browser.jitter_pct = float(v)
+        except ValueError:
+            raise ConfigurationError(f"XCLI_JITTER_PCT must be a float, got '{v}'")

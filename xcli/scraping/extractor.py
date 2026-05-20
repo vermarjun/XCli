@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import Any
 
 from patchright.async_api import Page
@@ -80,6 +81,33 @@ logger = logging.getLogger(__name__)
 
 NAV_DELAY: float = 2.0  # seconds between navigations (stealth pacing)
 RATE_LIMIT_RETRY_DELAY: float = 5.0  # seconds to back off on soft rate-limit
+
+
+# ---------------------------------------------------------------------------
+# Jitter helper
+# ---------------------------------------------------------------------------
+
+
+def _jitter(base: float, pct: float) -> float:
+    """Apply uniform random jitter to a base delay.
+
+    Returns ``base * (1 + uniform(-pct, pct))``, clamped to a minimum of 0.0.
+
+    Args:
+        base: Base delay in seconds.
+        pct:  Fractional jitter factor (0.0 = no jitter, 0.2 = ±20%).
+              Must be in [0.0, 1.0] — callers are responsible for validation.
+
+    Examples:
+        _jitter(2.0, 0.0)  → 2.0 (exactly)
+        _jitter(1.0, 0.2)  → value in [0.8, 1.2]
+        _jitter(2.0, 1.0)  → value in [0.0, 4.0]
+    """
+    if pct == 0.0:
+        return base
+    factor = 1.0 + random.uniform(-pct, pct)
+    return max(0.0, base * factor)
+
 
 # ---------------------------------------------------------------------------
 # JavaScript for extracting visible tweets (one page.evaluate per scroll)
@@ -360,8 +388,18 @@ class XExtractor:
         interception in integration tests for more realistic coverage.
     """
 
-    def __init__(self, page: Page) -> None:
+    def __init__(self, page: Page, *, jitter_pct: float = 0.0) -> None:
+        """Initialise XExtractor.
+
+        Args:
+            page:       Active Patchright page (must belong to an authenticated session).
+            jitter_pct: Fractional jitter applied to ``NAV_DELAY`` sleeps.
+                        Default is 0.0 (no jitter) so integration tests stay
+                        fully deterministic.  Production tools pass the config
+                        or CLI-override value here.
+        """
         self._page = page
+        self._jitter_pct: float = jitter_pct
         # Test-only: replaces https://x.com with a local server base URL.
         # Set in integration tests; always None in production.
         self._test_only_base_url_override: str | None = None
@@ -540,7 +578,7 @@ class XExtractor:
                 post["comments_partial"] = False
                 continue
 
-            await asyncio.sleep(NAV_DELAY)
+            await asyncio.sleep(_jitter(NAV_DELAY, self._jitter_pct))
             try:
                 comments = await self.fetch_thread_comments(post_url, comments_per)
                 post["comments"] = comments
@@ -1056,7 +1094,7 @@ class XExtractor:
                 post["comments_partial"] = False
                 continue
 
-            await asyncio.sleep(NAV_DELAY)
+            await asyncio.sleep(_jitter(NAV_DELAY, self._jitter_pct))
             try:
                 comments = await self.fetch_thread_comments(post_url, comments_per)
                 post["comments"] = comments

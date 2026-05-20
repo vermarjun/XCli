@@ -31,6 +31,9 @@ htmlcov/
 # Test output directories
 tests/**/output/
 
+# DOM snapshot dumps (scratch artefacts — not committed; refresh with scripts/dump_snapshots.py)
+tests/integration/dumps/
+
 # Environment secrets
 .env
 
