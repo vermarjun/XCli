@@ -1,13 +1,11 @@
 # XCli
 
 <p align="left">
-  <a href="https://github.com/vermarjun/XCli/actions/workflows/ci.yml" target="_blank"><img src="https://github.com/vermarjun/XCli/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/vermarjun/XCli/blob/main/LICENSE" target="_blank"><img src="https://img.shields.io/badge/License-MIT-%233fb950?labelColor=32383f" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue?labelColor=32383f" alt="Python"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-462%20passing-%233fb950?labelColor=32383f" alt="Tests"></a>
 </p>
 
-A stealth CLI that pulls your X (Twitter) home feed and any profile's posts + threaded comments as clean JSON — driven by a real, persistent Chrome session via [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright). No private APIs, no XHR injection, no headless tells.
+A stealth CLI that pulls your X (Twitter) home feed and any profile's posts + threaded comments as **structured JSON** — driven by a real, persistent Chrome session via [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright). Designed as a callable endpoint for **agents and pipelines**: clean stdout, logs to stderr, exit codes that mean something. No private APIs, no XHR injection, no headless tells.
 
 > [!IMPORTANT]
 > **FAQ**
@@ -26,6 +24,49 @@ A stealth CLI that pulls your X (Twitter) home feed and any profile's posts + th
 | `xcli feed` | Pull top N posts from your home feed with top Y comments on each | working |
 | `xcli profile` | Pull a user's profile (bio, links, metadata) + top N posts + top Y comments on each | working |
 | `xcli doctor` | Run stealth fingerprint checks (bot.sannysoft + CreepJS) and X reachability | working |
+
+<br/>
+
+## 🤖 Built for agents and pipelines
+
+XCli is a CLI so it works **anywhere a shell does** — Claude Code, Cursor, Aider, LangChain `ShellTool`, n8n, plain Python `subprocess`, cron jobs, GitHub Actions. You log in once with your throwaway account, then the agent calls the CLI like a function.
+
+**The contract is simple:**
+- **stdout** is JSON. Pipe it directly into `jq`, an LLM, or `json.loads`.
+- **stderr** is progress / logs. Won't pollute the JSON.
+- **Exit code** signals failure mode: `0` ok, `2` re-login needed, `3` rate-limited (back off), `4` profile gone, `1` other. Agent decides what to do.
+- **Schemas are stable.** Same shape every call — see [Output schemas](#-setup-help) below.
+
+**From a Python agent:**
+
+```python
+import json, subprocess
+
+result = subprocess.run(
+    ["uv", "run", "xcli", "feed", "-n", "20", "-y", "5", "--headless"],
+    capture_output=True, text=True,
+)
+if result.returncode == 2:
+    raise RuntimeError("Session expired — run `xcli login` once on a human terminal")
+if result.returncode == 3:
+    # rate-limited; back off and retry later
+    ...
+data = json.loads(result.stdout)
+for post in data["posts"]:
+    print(post["author"]["username"], post["metrics"]["likes"])
+```
+
+**From a shell agent:**
+
+```bash
+# Feed a freshly-scraped timeline into an LLM
+xcli feed -n 20 -y 5 | llm -m claude-4.7-opus "Summarize trends and top engagement in this X feed JSON"
+
+# Research a handle and pipe to jq for a quick view
+xcli profile elonmusk -n 10 -y 5 | jq '.profile, [.posts[] | {id, likes: .metrics.likes, text}]'
+```
+
+**Why not MCP?** A CLI works in *any* agent runtime, not just MCP-aware clients. If you specifically target Claude Desktop / Cursor and want a warm browser between calls, an MCP wrapper around this CLI is a one-day port — the scraper underneath is the same. Open an issue if that's interesting.
 
 <br/>
 
@@ -211,7 +252,7 @@ uv sync --all-extras
 # Fast feedback — unit + integration tests, no coverage gate
 uv run pytest tests/unit tests/integration -q
 
-# Full CI-equivalent — coverage gate ≥80%
+# With coverage gate (≥80%)
 uv run pytest tests/unit tests/integration --cov=xcli --cov-fail-under=80 -q
 
 # Lint + format
