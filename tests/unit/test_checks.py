@@ -13,7 +13,10 @@ import pytest
 
 from xcli.checks import (
     CheckStatus,
+    parse_areyouheadless,
+    parse_browserscan,
     parse_creepjs_payload,
+    parse_pixelscan,
     parse_sannysoft_rows,
 )
 
@@ -499,3 +502,136 @@ class TestCheckResultContract:
 
         r = CheckResult(name="x", category="y", status=CheckStatus.PASS, detail="ok")
         assert r.evidence is None
+
+
+# ---------------------------------------------------------------------------
+# parse_areyouheadless
+# ---------------------------------------------------------------------------
+
+
+class TestParseAreYouHeadless:
+    def test_success_class_passes(self):
+        r = parse_areyouheadless(
+            {"verdict_text": "You are not Chrome headless", "verdict_class": "success"}
+        )
+        assert r.name == "areyouheadless"
+        assert r.status == CheckStatus.PASS
+        assert r.critical is False
+        assert "not Chrome headless" in r.detail
+
+    def test_error_class_fails(self):
+        r = parse_areyouheadless(
+            {"verdict_text": "You are Chrome headless", "verdict_class": "error"}
+        )
+        assert r.status == CheckStatus.FAIL
+        assert r.critical is False  # advisory, doesn't gate doctor exit
+        assert "Chrome headless" in r.detail
+
+    def test_unknown_class_warns(self):
+        r = parse_areyouheadless({"verdict_text": "?", "verdict_class": "neutral"})
+        assert r.status == CheckStatus.WARN
+
+    def test_missing_payload_warns(self):
+        r = parse_areyouheadless({"verdict_text": None, "verdict_class": None})
+        assert r.status == CheckStatus.WARN
+
+
+# ---------------------------------------------------------------------------
+# parse_browserscan
+# ---------------------------------------------------------------------------
+
+
+class TestParseBrowserscan:
+    def test_robot_verdict_fails(self):
+        r = parse_browserscan({"verdict_text": "Robot", "body_snippet": ""})
+        assert r.name == "browserscan_bot"
+        assert r.status == CheckStatus.FAIL
+        assert "Robot" in r.detail
+
+    def test_normal_verdict_passes(self):
+        r = parse_browserscan({"verdict_text": "Normal", "body_snippet": ""})
+        assert r.status == CheckStatus.PASS
+
+    def test_human_verdict_passes(self):
+        r = parse_browserscan({"verdict_text": "Human", "body_snippet": ""})
+        assert r.status == CheckStatus.PASS
+
+    def test_empty_verdict_warns(self):
+        r = parse_browserscan({"verdict_text": "", "body_snippet": ""})
+        assert r.status == CheckStatus.WARN
+
+    def test_unknown_verdict_warns(self):
+        r = parse_browserscan({"verdict_text": "Sponge", "body_snippet": ""})
+        assert r.status == CheckStatus.WARN
+
+    def test_critical_flag_false_for_all_outcomes(self):
+        for verdict in ("Robot", "Normal", "", "Mystery"):
+            r = parse_browserscan({"verdict_text": verdict, "body_snippet": ""})
+            assert r.critical is False, verdict
+
+
+# ---------------------------------------------------------------------------
+# parse_pixelscan
+# ---------------------------------------------------------------------------
+
+
+class TestParsePixelscan:
+    def test_success_only_visible_passes(self):
+        r = parse_pixelscan(
+            {
+                "state_success_visible": True,
+                "state_error_visible": False,
+                "state_default_visible": False,
+            }
+        )
+        assert r.name == "pixelscan_bot"
+        assert r.status == CheckStatus.PASS
+
+    def test_error_only_visible_fails(self):
+        r = parse_pixelscan(
+            {
+                "state_success_visible": False,
+                "state_error_visible": True,
+                "state_default_visible": False,
+            }
+        )
+        assert r.status == CheckStatus.FAIL
+        assert r.critical is False
+
+    def test_default_still_visible_means_not_settled(self):
+        # When state-default is still showing, Angular hasn't transitioned to a verdict.
+        r = parse_pixelscan(
+            {
+                "state_success_visible": False,
+                "state_error_visible": True,
+                "state_default_visible": True,
+            }
+        )
+        assert r.status == CheckStatus.WARN
+
+    def test_ssr_stacked_all_visible_warns(self):
+        # SSR before hydration renders all four state divs visible — must WARN, not FAIL.
+        r = parse_pixelscan(
+            {
+                "state_success_visible": True,
+                "state_error_visible": True,
+                "state_default_visible": True,
+            }
+        )
+        assert r.status == CheckStatus.WARN
+
+    def test_neither_visible_warns(self):
+        r = parse_pixelscan(
+            {
+                "state_success_visible": False,
+                "state_error_visible": False,
+                "state_default_visible": False,
+            }
+        )
+        assert r.status == CheckStatus.WARN
+
+    def test_error_payload_warns_not_fails(self):
+        # Per design choice: pixelscan errors are advisory, not failures.
+        r = parse_pixelscan({"error": "net::ERR_TIMED_OUT"})
+        assert r.status == CheckStatus.WARN
+        assert "net::ERR_TIMED_OUT" in r.detail

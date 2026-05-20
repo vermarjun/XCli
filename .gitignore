@@ -34,6 +34,9 @@ tests/**/output/
 # DOM snapshot dumps (scratch artefacts — not committed; refresh with scripts/dump_snapshots.py)
 tests/integration/dumps/
 
+# Probe scratch scripts (one-shot exploration tools — not committed)
+scripts/probe_*.py
+
 # Environment secrets
 .env
 
