@@ -9,6 +9,7 @@ import pytest
 
 from xcli.scraping.parsing import (
     extract_links_from_anchors,
+    parse_human_timestamp,
     parse_iso_datetime,
     parse_join_date,
     parse_metric_count,
@@ -315,6 +316,45 @@ def test_extract_links_skips_relative_hrefs() -> None:
 
 def test_extract_links_empty_input() -> None:
     assert extract_links_from_anchors([]) == []
+
+
+# ---------------------------------------------------------------------------
+# parse_human_timestamp
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_str, expected",
+    [
+        # Full X timestamp with time prefix
+        ("12:34 PM · May 19, 2026", "2026-05-19"),
+        # Date only
+        ("May 19, 2026", "2026-05-19"),
+        # Abbreviated month with day and year
+        ("Mar 5, 2024", "2024-03-05"),
+        # Full month name
+        ("December 31, 1999", "1999-12-31"),
+        # Relative timestamps — cannot resolve, return None
+        ("5h", None),
+        # Month+day only (no year) — no match, return None
+        ("Mar 5", None),
+        # Empty string
+        ("", None),
+        # None input
+        (None, None),
+        # Raw ISO datetime in aria-label — falls through to parse_iso_datetime
+        ("2024-05-19T12:34:56.000Z", "2024-05-19T12:34:56.000Z"),
+        # Completely unparseable text
+        ("not a date", None),
+        # Year only (no month) — no match
+        ("2024", None),
+    ],
+)
+def test_parse_human_timestamp(input_str: str | None, expected: str | None) -> None:
+    result = parse_human_timestamp(input_str)
+    assert (
+        result == expected
+    ), f"parse_human_timestamp({input_str!r}) → {result!r}, expected {expected!r}"
 
 
 def test_extract_links_multiple_unique() -> None:

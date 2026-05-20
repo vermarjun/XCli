@@ -37,6 +37,7 @@
             "views": null
           },
           "posted_at": "2026-05-19T09:05:00.000Z",
+          "posted_at_text": "9:05 AM",
           "reposted_by": null,
           "text": "Great tweet! I totally agree.",
           "url": "https://x.com/replier1/status/200"
@@ -67,6 +68,7 @@
             "views": null
           },
           "posted_at": "2026-05-19T09:10:00.000Z",
+          "posted_at_text": "9:10 AM",
           "reposted_by": null,
           "text": "Thanks for sharing this!",
           "url": "https://x.com/replier2/status/201"
@@ -99,6 +101,7 @@
         "views": 1200
       },
       "posted_at": "2026-05-19T09:00:00.000Z",
+      "posted_at_text": "9:00 AM",
       "reposted_by": null,
       "text": "Hello world! This is the first test tweet.",
       "url": "https://x.com/user1/status/100"
@@ -136,6 +139,7 @@
             "views": null
           },
           "posted_at": "2026-05-19T09:05:00.000Z",
+          "posted_at_text": "9:05 AM",
           "reposted_by": null,
           "text": "Great tweet! I totally agree.",
           "url": "https://x.com/replier1/status/200"
@@ -166,6 +170,7 @@
             "views": null
           },
           "posted_at": "2026-05-19T09:10:00.000Z",
+          "posted_at_text": "9:10 AM",
           "reposted_by": null,
           "text": "Thanks for sharing this!",
           "url": "https://x.com/replier2/status/201"
@@ -198,6 +203,7 @@
         "views": 5000
       },
       "posted_at": "2026-05-19T08:00:00.000Z",
+      "posted_at_text": "8:00 AM",
       "reposted_by": "user2 Reposted",
       "text": "This tweet was reposted from user3.",
       "url": "https://x.com/user3/status/101"
@@ -235,6 +241,7 @@
             "views": null
           },
           "posted_at": "2026-05-19T09:05:00.000Z",
+          "posted_at_text": "9:05 AM",
           "reposted_by": null,
           "text": "Great tweet! I totally agree.",
           "url": "https://x.com/replier1/status/200"
@@ -265,6 +272,7 @@
             "views": null
           },
           "posted_at": "2026-05-19T09:10:00.000Z",
+          "posted_at_text": "9:10 AM",
           "reposted_by": null,
           "text": "Thanks for sharing this!",
           "url": "https://x.com/replier2/status/201"
@@ -302,6 +310,7 @@
         "views": 10000
       },
       "posted_at": "2026-05-19T07:30:00.000Z",
+      "posted_at_text": "7:30 AM",
       "reposted_by": null,
       "text": "Check out this photo!",
       "url": "https://x.com/user3/status/102"

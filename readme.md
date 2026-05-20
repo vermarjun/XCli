@@ -86,6 +86,7 @@ xcli profile @TwitterDev | jq .
       "views": 1500
     },
     "posted_at": "2026-05-01T12:00:00Z",
+    "posted_at_text": "12:00 PM · May 1, 2026",
     "url": "https://x.com/xcli_user/status/1234567890123456789",
     "comments": []
   }

@@ -36,6 +36,7 @@ from xcli.core.utils import capture_as_you_scroll, dismiss_modals
 from xcli.exceptions import AuthenticationError, RateLimitError
 from xcli.scraping.parsing import (
     extract_links_from_anchors,
+    parse_human_timestamp,
     parse_iso_datetime,
     parse_join_date,
     parse_metric_count,
@@ -46,6 +47,7 @@ from xcli.scraping.parsing import (
 from xcli.scraping.selectors import (
     ACCOUNT_SWITCHER_BUTTON,
     AD_INDICATOR,
+    APP_TAB_BAR_PROFILE_LINK,
     EMPTY_STATE_HEADER,
     LOGIN_BUTTON,
     PRIMARY_COLUMN,
@@ -57,6 +59,7 @@ from xcli.scraping.selectors import (
     PROFILE_LOCATION,
     PROFILE_URL_FIELD,
     PROFILE_USER_NAME,
+    RESERVED_HANDLE_PATHS,
     SOCIAL_CONTEXT,
     TIMELINE_CELL,
     TWEET_ARTICLE,
@@ -176,9 +179,12 @@ _EXTRACT_TWEETS_JS = r"""
       // --- Full article innerText (for LLM consumption) ---
       const innertext = normalize(article.innerText || '');
 
-      // --- Time ---
-      const timeEl = article.querySelector('time[datetime]');
-      const postedAt = timeEl ? (timeEl.getAttribute('datetime') || '') : '';
+      // --- Time (multi-source fallback for headless hydration delays) ---
+      const timeEl = article.querySelector('time');  // any <time>, not requiring datetime attr
+      const postedAtIso   = timeEl ? (timeEl.getAttribute('datetime') || '') : '';
+      const postedAtAria  = timeEl ? (timeEl.getAttribute('aria-label') || '') : '';
+      const postedAtTitle = timeEl ? (timeEl.getAttribute('title') || '') : '';
+      const postedAtText  = timeEl ? (timeEl.innerText || timeEl.textContent || '') : '';
 
       // --- Metrics (from aria-label on action buttons) ---
       const getAriaNum = sel => {
@@ -232,7 +238,10 @@ _EXTRACT_TWEETS_JS = r"""
         verified,
         text,
         innertext,
-        postedAt,
+        postedAtIso,
+        postedAtAria,
+        postedAtTitle,
+        postedAtText,
         replyLabel,
         retweetLabel,
         likeLabel,
@@ -250,6 +259,18 @@ _EXTRACT_TWEETS_JS = r"""
       return { statusHref: '', avatarTestid: '', error: String(err) };
     }
   });
+}
+"""
+
+# JS for waiting until at least one article has a time[datetime] element.
+# Takes the article selector as argument so the string stays in selectors.py.
+_WAIT_FOR_TIME_JS = """
+(articleSelector) => {
+    const articles = document.querySelectorAll(articleSelector);
+    for (const a of articles) {
+        if (a.querySelector('time[datetime]')) return true;
+    }
+    return false;
 }
 """
 
@@ -318,6 +339,17 @@ def _build_tweet_record(raw: dict) -> dict | None:
         if not raw.get("hasPhoto"):
             media.append({"kind": "video", "url": None})
 
+    # Timestamp: try multiple sources in priority order
+    posted_at = (
+        parse_iso_datetime(raw.get("postedAtIso"))
+        or parse_human_timestamp(raw.get("postedAtAria"))
+        or parse_human_timestamp(raw.get("postedAtTitle"))
+        or None
+    )
+    posted_at_text = (
+        raw.get("postedAtAria") or raw.get("postedAtTitle") or raw.get("postedAtText") or ""
+    ).strip() or None
+
     return {
         "id": tweet_id,
         "url": url,
@@ -328,7 +360,8 @@ def _build_tweet_record(raw: dict) -> dict | None:
         },
         "text": raw.get("text") or "",
         "innertext": raw.get("innertext") or "",
-        "posted_at": parse_iso_datetime(raw.get("postedAt")),
+        "posted_at": posted_at,
+        "posted_at_text": posted_at_text,
         "metrics": metrics,
         "links": links,
         "media": media,
@@ -343,27 +376,100 @@ def _build_tweet_record(raw: dict) -> dict | None:
 # ---------------------------------------------------------------------------
 
 _READ_HANDLE_JS = """
-(selector) => {
-    const el = document.querySelector(selector);
-    return el ? (el.getAttribute('aria-label') || '') : '';
+(args) => {
+    const { accountSwitcherSelector, profileLinkSelector, reservedPaths } = args;
+    const HANDLE_RE = /^(?:https?:\\/\\/[^\\/]+)?\\/([A-Za-z0-9_]{1,15})\\/?$/;
+    const reservedSet = new Set(reservedPaths);
+
+    function extractFromHref(href) {
+        if (!href) return null;
+        // Strip query/fragment
+        const clean = href.split('?')[0].split('#')[0];
+        const m = HANDLE_RE.exec(clean);
+        if (!m) return null;
+        const candidate = m[1];
+        if (reservedSet.has(candidate.toLowerCase())) return null;
+        return candidate;
+    }
+
+    // 1. Account switcher aria-label: "Account switcher @handle" or similar
+    const switcherEl = document.querySelector(accountSwitcherSelector);
+    if (switcherEl) {
+        const label = switcherEl.getAttribute('aria-label') || '';
+        const atMatch = label.match(/@([A-Za-z0-9_]{1,15})/);
+        if (atMatch) return atMatch[1];
+    }
+
+    // 2. AppTabBar Profile Link href
+    const profileLinkEl = document.querySelector(profileLinkSelector);
+    if (profileLinkEl) {
+        const href = profileLinkEl.getAttribute('href') || '';
+        const handle = extractFromHref(href);
+        if (handle) return handle;
+    }
+
+    // 3. Any aside a[href^="/"] matching handle pattern
+    const asideAnchors = Array.from(document.querySelectorAll('aside a[href^="/"]'));
+    for (const a of asideAnchors) {
+        const handle = extractFromHref(a.getAttribute('href') || '');
+        if (handle) return handle;
+    }
+
+    // 4. Any header a[href^="/"] matching handle pattern
+    const headerAnchors = Array.from(document.querySelectorAll('header a[href^="/"]'));
+    for (const a of headerAnchors) {
+        const handle = extractFromHref(a.getAttribute('href') || '');
+        if (handle) return handle;
+    }
+
+    // 5. UserAvatar testid inside nav (left-rail context, not tweet body)
+    const navAvatars = Array.from(
+        document.querySelectorAll('nav [data-testid^="UserAvatar-Container-"]')
+    );
+    for (const el of navAvatars) {
+        const testid = el.getAttribute('data-testid') || '';
+        const suffix = testid.replace('UserAvatar-Container-', '');
+        const validHandle = /^[A-Za-z0-9_]{1,15}$/.test(suffix);
+        if (suffix && validHandle && !reservedSet.has(suffix.toLowerCase())) {
+            return suffix;
+        }
+    }
+
+    return '';
 }
 """
 
 
 async def read_authenticated_handle(page: Page) -> str | None:
-    """Read the logged-in user's handle from the account-switcher aria-label.
+    """Read the logged-in user's handle using a multi-step fallback chain.
+
+    Tries in order:
+    1. Aria-label of the account-switcher button (collapsed in headless mode).
+    2. href of AppTabBar_Profile_Link.
+    3. href of any ``aside a[href^="/"]`` that looks like a handle.
+    4. href of any ``header a[href^="/"]`` that looks like a handle.
+    5. UserAvatar testid inside a ``nav`` element (left-rail context).
+
+    Reserved URL paths (``/home``, ``/explore``, etc.) are excluded via
+    ``RESERVED_HANDLE_PATHS``.
 
     Args:
         page: Active Patchright page (must be on an authenticated X page).
 
     Returns:
-        The handle string (without leading ``@``), or ``None`` if not present
-        or unparseable.
+        The handle string (without leading ``@``), or ``None`` if not found.
     """
     try:
-        label = await page.evaluate(_READ_HANDLE_JS, ACCOUNT_SWITCHER_BUTTON)
-        if isinstance(label, str) and "@" in label:
-            return label.split("@")[-1].split()[0].strip("@")
+        result = await page.evaluate(
+            _READ_HANDLE_JS,
+            {
+                "accountSwitcherSelector": ACCOUNT_SWITCHER_BUTTON,
+                "profileLinkSelector": APP_TAB_BAR_PROFILE_LINK,
+                "reservedPaths": list(RESERVED_HANDLE_PATHS),
+            },
+        )
+        if isinstance(result, str) and result:
+            return result
     except Exception:
         pass
     return None
@@ -543,6 +649,16 @@ class XExtractor:
         await dismiss_modals(self._page)
         await detect_rate_limit(self._page)
 
+        # 3b. Wait for at least one article with a time[datetime] to hydrate
+        try:
+            await self._page.wait_for_function(
+                _WAIT_FOR_TIME_JS,
+                arg=TWEET_ARTICLE,
+                timeout=5000,
+            )
+        except PlaywrightTimeoutError:
+            logger.debug("No article with time[datetime] appeared within 5s; continuing")
+
         # 4. Capture-as-you-scroll
         scope = PRIMARY_COLUMN
 
@@ -644,6 +760,18 @@ class XExtractor:
             await self._page.wait_for_selector(PRIMARY_COLUMN, timeout=15000)
         except PlaywrightTimeoutError:
             logger.warning("primaryColumn not found on thread page %s", post_url)
+
+        # 2b. Wait for at least one article with a time[datetime] to hydrate
+        try:
+            await self._page.wait_for_function(
+                _WAIT_FOR_TIME_JS,
+                arg=TWEET_ARTICLE,
+                timeout=5000,
+            )
+        except PlaywrightTimeoutError:
+            logger.debug(
+                "No article with time[datetime] appeared within 5s on thread page; continuing"
+            )
 
         # 3. Read the OP tweet's id to use as skip_first_id
         op_id: str | None = None

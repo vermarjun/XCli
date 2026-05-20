@@ -289,6 +289,89 @@ def parse_iso_datetime(s: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# parse_human_timestamp
+# ---------------------------------------------------------------------------
+
+# English month name → number mapping (abbreviated and full forms)
+_HUMAN_MONTH_TABLE: dict[str, int] = {
+    "Jan": 1,
+    "January": 1,
+    "Feb": 2,
+    "February": 2,
+    "Mar": 3,
+    "March": 3,
+    "Apr": 4,
+    "April": 4,
+    "May": 5,
+    "Jun": 6,
+    "June": 6,
+    "Jul": 7,
+    "July": 7,
+    "Aug": 8,
+    "August": 8,
+    "Sep": 9,
+    "September": 9,
+    "Oct": 10,
+    "October": 10,
+    "Nov": 11,
+    "November": 11,
+    "Dec": 12,
+    "December": 12,
+}
+
+# Regex: match "MonthName day, year" — e.g. "May 19, 2026", "December 31, 1999"
+# Uses [a-z]* after the abbreviated month prefix to match full names too.
+_HUMAN_DATE_RE = re.compile(
+    r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})\b",
+    re.IGNORECASE,
+)
+
+
+def parse_human_timestamp(s: str | None) -> str | None:
+    """Best-effort parse of X's human-readable timestamps.
+
+    X renders timestamps in various forms depending on age and locale, e.g.:
+      "12:34 PM · May 19, 2026"
+      "May 19, 2026"
+      "5h"  (relative — cannot resolve without reference time; return None)
+      "2024-05-19T12:34:56.000Z" (occasionally raw ISO in aria-label)
+
+    Returns ISO date string (YYYY-MM-DD) when month + day + year can be
+    extracted. Returns None for relative timestamps ("5h", "Mar 5") and
+    unparseable input. English-only month table; non-English locales will
+    return None from this function (documented limitation).
+
+    If the input is itself a valid ISO datetime string (e.g. appearing in
+    an aria-label), delegates to parse_iso_datetime and returns that value.
+    """
+    if not s:
+        return None
+    if not isinstance(s, str):
+        return None
+    text = s.strip()
+    if not text:
+        return None
+
+    # Try the regex for "MonthName day, year"
+    m = _HUMAN_DATE_RE.search(text)
+    if m:
+        month_abbr = m.group(1).capitalize()[:3]  # normalise to 3-char abbr key
+        day = int(m.group(2))
+        year = int(m.group(3))
+        # Look up in table using 3-char prefix (all table keys start with 3 chars)
+        month_num = _HUMAN_MONTH_TABLE.get(month_abbr)
+        if month_num is not None:
+            return f"{year}-{month_num:02d}-{day:02d}"
+
+    # Fallback: if it looks like a raw ISO datetime string, pass through
+    iso = parse_iso_datetime(text)
+    if iso is not None:
+        return iso
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # extract_links_from_anchors
 # ---------------------------------------------------------------------------
 

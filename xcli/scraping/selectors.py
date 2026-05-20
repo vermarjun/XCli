@@ -102,6 +102,36 @@ AUTH_BLOCKER_URL_PATHS: tuple[str, ...] = (
 # Individual account-switcher button (used to read the logged-in handle)
 ACCOUNT_SWITCHER_BUTTON = '[data-testid="SideNav_AccountSwitcher_Button"]'
 
+# App tab bar profile link (used as fallback for reading logged-in handle)
+APP_TAB_BAR_PROFILE_LINK = '[data-testid="AppTabBar_Profile_Link"]'
+
+# Deny-list of path segments that are NOT user handles.
+# Used in read_authenticated_handle fallback chain to filter out navigation paths.
+RESERVED_HANDLE_PATHS: tuple[str, ...] = (
+    "home",
+    "explore",
+    "notifications",
+    "messages",
+    "i",
+    "search",
+    "settings",
+    "compose",
+    "premium",
+    "tos",
+    "privacy",
+    "verified-choose",
+    "verified_choose",
+    "bookmarks",
+    "lists",
+    "communities",
+    "jobs",
+    "logout",
+    "login",
+    "signup",
+    "about",
+    "help",
+)
+
 # Logged-in navigation signals (structural, not text-dependent)
 # Combined CSS for convenience in auth.py's is_logged_in
 LOGGED_IN_NAV = (
