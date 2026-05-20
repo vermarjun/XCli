@@ -3,10 +3,13 @@
   tweet_thread.html — synthetic X.com tweet thread fixture for integration tests.
 
   Structure:
-  - First article = OP tweet (id 100, user1). Extractor should skip this when
+  - First article = OP tweet (id=100, user=user1). Extractor skips this when
     fetching thread comments (skip_first_id = "100").
-  - Articles 200–204 = replies.
+  - Articles 200–204 = real replies.
   - One "Show more replies" placeholder row (no tweetText, no media, tiny innerText).
+  - The boundary cell: a cellInnerDiv containing an <h2> heading.
+    thread_boundary=True stops collection HERE (locale-independent: no text match).
+  - Recommendation tweets (ids 900, 901) after the boundary MUST NOT be captured.
 
   Key testids:
   - primaryColumn  : page-ready signal
@@ -153,6 +156,54 @@
         <div data-testid="reply" aria-label="0 replies"></div>
         <div data-testid="retweet" aria-label="0 reposts"></div>
         <div data-testid="like" aria-label="1 like"></div>
+        <div data-testid="bookmark" aria-label="0 bookmarks"></div>
+      </article>
+    </div>
+
+    <!-- ============================================================
+         BOUNDARY CELL — contains a heading element.
+         thread_boundary=True stops collection here.
+         Locale-independent: detected by heading presence, NOT by text content.
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <h2>Discover more</h2>
+    </div>
+
+    <!-- ============================================================
+         RECOMMENDATION tweets — MUST NOT be captured when
+         thread_boundary=True. Authors are distinct from all real
+         replies so a test can assert they don't appear in results.
+         ============================================================ -->
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-recuser1"></div>
+        <div data-testid="User-Name">
+          <span>Rec User One</span>
+          <span>@recuser1</span>
+        </div>
+        <div data-testid="tweetText">Cisco AI Leaderboard results are in! Check them out.</div>
+        <time datetime="2026-05-19T08:00:00.000Z">8:00 AM</time>
+        <a href="/recuser1/status/900">May 19</a>
+        <div data-testid="reply" aria-label="10 replies"></div>
+        <div data-testid="retweet" aria-label="5 reposts"></div>
+        <div data-testid="like" aria-label="50 likes"></div>
+        <div data-testid="bookmark" aria-label="2 bookmarks"></div>
+      </article>
+    </div>
+
+    <div data-testid="cellInnerDiv">
+      <article data-testid="tweet" role="article">
+        <div data-testid="UserAvatar-Container-recuser2"></div>
+        <div data-testid="User-Name">
+          <span>Rec User Two</span>
+          <span>@recuser2</span>
+        </div>
+        <div data-testid="tweetText">Another unrelated recommendation tweet content here.</div>
+        <time datetime="2026-05-19T07:45:00.000Z">7:45 AM</time>
+        <a href="/recuser2/status/901">May 19</a>
+        <div data-testid="reply" aria-label="3 replies"></div>
+        <div data-testid="retweet" aria-label="1 repost"></div>
+        <div data-testid="like" aria-label="20 likes"></div>
         <div data-testid="bookmark" aria-label="0 bookmarks"></div>
       </article>
     </div>

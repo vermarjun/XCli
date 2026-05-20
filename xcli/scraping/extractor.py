@@ -123,9 +123,30 @@ _EXTRACT_TWEETS_JS = r"""
    avatarSelector, statusLinkSelector, replyBtnSelector,
    retweetBtnSelector, likeBtnSelector, bookmarkBtnSelector,
    viewCountLinkSelector, mediaPhotoSelector, mediaVideoSelector,
-   adIndicatorSelector, socialContextSelector, cellSelector }) => {
+   adIndicatorSelector, socialContextSelector, cellSelector,
+   scopeSelector, threadBoundary }) => {
   const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
-  const articles = Array.from(document.querySelectorAll(articleSelector));
+  const scope = scopeSelector
+    ? (document.querySelector(scopeSelector) || document)
+    : document;
+
+  let articles;
+  if (threadBoundary) {
+    // Walk cellInnerDiv cells in DOM order; stop at the first cell that
+    // contains a heading element (the "Discover more" boundary).
+    // Locale-independent: we detect presence of h1/h2/h3/[role="heading"],
+    // never match by text.
+    const cells = scope.querySelectorAll(cellSelector);
+    articles = [];
+    for (const cell of cells) {
+      const heading = cell.querySelector('h1, h2, h3, [role="heading"]');
+      if (heading) break;  // entering recommendations zone — stop here
+      const article = cell.querySelector(articleSelector);
+      if (article) articles.push(article);
+    }
+  } else {
+    articles = Array.from(scope.querySelectorAll(articleSelector));
+  }
 
   return articles.map(article => {
     try {
@@ -589,17 +610,35 @@ class XExtractor:
         self,
         *,
         scope_selector: str,
+        thread_boundary: bool = False,
     ) -> list[dict]:
         """Extract all currently visible tweet records from the DOM.
 
         Runs ONE page.evaluate call that iterates all tweet article elements
         (``TWEET_ARTICLE`` selector) within ``scope_selector``.
-        Returns a list of structured dicts ready for ``_build_tweet_record``.
+
+        Args:
+            scope_selector:   CSS selector for the root element to search within.
+            thread_boundary:  When True, walk ``TIMELINE_CELL`` (cellInnerDiv)
+                              elements in DOM order and stop at the first cell that
+                              contains a heading element (h1/h2/h3/[role="heading"]).
+                              This is the locale-independent boundary detector for
+                              the X thread-page recommendations zone.
+                              When False (default), collects all articles within the
+                              scope — used for home feed and profile timeline.
+
+        Returns:
+            List of structured dicts ready for ``_build_tweet_record``.
         """
+        js_args = {
+            **_JS_SELECTORS,
+            "scopeSelector": scope_selector,
+            "threadBoundary": thread_boundary,
+        }
         try:
             raw_list: list[dict[str, Any]] = await self._page.evaluate(
                 _EXTRACT_TWEETS_JS,
-                _JS_SELECTORS,
+                js_args,
             )
         except Exception as e:
             logger.debug("page.evaluate error in _extract_visible_tweets: %s", e)
@@ -700,6 +739,10 @@ class XExtractor:
                 post["comments"] = comments
                 post["comments_captured"] = len(comments)
                 post["comments_partial"] = len(comments) < comments_per
+                # Drain any boundary-detector warnings from fetch_thread_comments
+                if hasattr(self, "_thread_warnings") and self._thread_warnings:
+                    warnings.extend(self._thread_warnings)
+                    self._thread_warnings = []
             except RateLimitError as e:
                 logger.warning(
                     "RateLimitError fetching comments for %s: %s — skipping comments",
@@ -773,8 +816,9 @@ class XExtractor:
                 "No article with time[datetime] appeared within 5s on thread page; continuing"
             )
 
-        # 3. Read the OP tweet's id to use as skip_first_id
+        # 3. Read the OP tweet's id (skip_first_id) and reply count (safety check)
         op_id: str | None = None
+        op_reply_count: int | None = None
         try:
             op_articles = await self._page.query_selector_all(TWEET_ARTICLE)
             if op_articles:
@@ -786,19 +830,29 @@ class XExtractor:
                     op_id = parse_post_id_from_href(href)
                     if op_id:
                         break
+                # Read reply count from the reply button aria-label
+                try:
+                    reply_btn = await op_el.query_selector(TWEET_REPLY_BTN)
+                    if reply_btn:
+                        reply_label = await reply_btn.get_attribute("aria-label") or ""
+                        op_reply_count = parse_metric_count(reply_label)
+                except Exception:
+                    pass
         except Exception as e:
             logger.debug("Could not determine OP tweet id: %s", e)
 
         # 4. Capture-as-you-scroll — skip OP, collect replies
+        # thread_boundary=True stops collection at the "Discover more" heading cell,
+        # preventing recommendations from leaking into the comments list.
         scope = PRIMARY_COLUMN
 
-        async def _extract(p: Page) -> list[dict]:
-            return await self._extract_visible_tweets(scope_selector=scope)
+        async def _extract_thread(p: Page) -> list[dict]:
+            return await self._extract_visible_tweets(scope_selector=scope, thread_boundary=True)
 
         max_scrolls = max(5, y * 2)
         raw_replies = await capture_as_you_scroll(
             self._page,
-            extract_fn=_extract,
+            extract_fn=_extract_thread,
             target=y + 5,  # over-fetch for ad/placeholder filtering
             max_scrolls=max_scrolls,
             max_stale=3,
@@ -819,6 +873,21 @@ class XExtractor:
             return False
 
         replies = [r for r in raw_replies if not _is_placeholder(r)][:y]
+
+        # 6. Safety sanity check: warn if captured comments vastly exceed OP's
+        #    reported reply count.  This surfaces boundary-detector failures
+        #    without hard-filtering (nested replies can legitimately inflate count).
+        #    Store the warning in self._thread_warnings so callers (fetch_feed /
+        #    research_profile) can surface it in their top-level warnings list.
+        if op_reply_count is not None and len(replies) > op_reply_count + 2:
+            warning_msg = (
+                f"Possible comment leak on {post_url}: "
+                f"captured {len(replies)} comments but OP reports {op_reply_count} replies"
+            )
+            logger.warning(warning_msg)
+            if not hasattr(self, "_thread_warnings") or self._thread_warnings is None:
+                self._thread_warnings: list[str] = []
+            self._thread_warnings.append(warning_msg)
 
         # Strip nested comment fields that don't apply to reply records
         for reply in replies:
@@ -1228,6 +1297,10 @@ class XExtractor:
                 post["comments"] = comments
                 post["comments_captured"] = len(comments)
                 post["comments_partial"] = len(comments) < comments_per
+                # Drain any boundary-detector warnings from fetch_thread_comments
+                if hasattr(self, "_thread_warnings") and self._thread_warnings:
+                    warnings.extend(self._thread_warnings)
+                    self._thread_warnings = []
             except RateLimitError as e:
                 logger.warning(
                     "RateLimitError fetching comments for %s: %s — skipping",

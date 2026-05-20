@@ -323,3 +323,55 @@ async def test_research_profile_not_found(browser, fixture_server) -> None:
     assert result["posts"] == []
     assert len(result["warnings"]) > 0
     assert any("not_found" in w for w in result["warnings"])
+
+
+# ---------------------------------------------------------------------------
+# test_fetch_thread_comments_respects_discover_boundary
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_thread_comments_respects_discover_boundary(browser, fixture_server) -> None:
+    """fetch_thread_comments stops at the heading boundary cell and ignores recommendations.
+
+    The fixture tweet_thread.html has:
+    - OP tweet (id=100)           → skipped via skip_first_id
+    - 5 real replies (ids 200-204) → captured
+    - 1 placeholder "Show more replies" row → filtered as placeholder
+    - 1 boundary cell with <h2>   → stops collection here
+    - 2 recommendation tweets (ids 900, 901 by @recuser1, @recuser2) → MUST NOT appear
+
+    We request y=10 (more than the 5 real replies) to force the extractor
+    toward the boundary and verify it stops rather than grabbing recommendations.
+    """
+    page = browser.page
+
+    # Route any status URL to our updated fixture
+    await _route_fixture(page, "**/status/**", "tweet_thread.html")
+
+    extractor = XExtractor(page)
+    comments = await extractor.fetch_thread_comments("https://x.com/user1/status/100", y=10)
+
+    # --- length assertion ---
+    # The fixture has 5 real replies (200–204). The placeholder is filtered.
+    # Requesting y=10 must NOT return more than 5, because the boundary stops
+    # collection before the 2 recommendation tweets.
+    assert (
+        len(comments) == 5
+    ), f"Expected exactly 5 real replies, got {len(comments)}: {[c['id'] for c in comments]}"
+
+    # --- id / author assertions ---
+    comment_ids = {c["id"] for c in comments}
+    comment_authors = {c["author"]["username"] for c in comments}
+
+    # All real replies must be present
+    for reply_id in ("200", "201", "202", "203", "204"):
+        assert reply_id in comment_ids, f"Real reply {reply_id} missing from comments"
+
+    # Recommendation tweets must NOT be present
+    assert "900" not in comment_ids, "Recommendation tweet 900 leaked into comments"
+    assert "901" not in comment_ids, "Recommendation tweet 901 leaked into comments"
+    assert "recuser1" not in comment_authors, "@recuser1 (recommendation) must not appear"
+    assert "recuser2" not in comment_authors, "@recuser2 (recommendation) must not appear"
+
+    # OP must not appear (skip_first_id logic)
+    assert "100" not in comment_ids, "OP tweet (id=100) must not appear in comments"
