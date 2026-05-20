@@ -169,7 +169,7 @@ class TestFeedToolRun:
         mock_browser = _make_mock_browser()
         captured: list[dict] = []
 
-        async def _fake_get_browser(headless=None):
+        async def _fake_get_browser(headless=None, channel=None):
             captured.append({"headless": headless})
             return mock_browser
 
@@ -274,7 +274,7 @@ class TestProfileToolRun:
         mock_browser = _make_mock_browser()
         captured: list[dict] = []
 
-        async def _fake_get_browser(headless=None):
+        async def _fake_get_browser(headless=None, channel=None):
             captured.append({"headless": headless})
             return mock_browser
 

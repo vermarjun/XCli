@@ -130,6 +130,42 @@ class TestValidation:
             config.validate()
 
 
+class TestChannel:
+    def test_channel_default_is_chromium(self) -> None:
+        """BrowserConfig.channel should default to 'chromium'."""
+        config = get_config()
+        assert config.browser.channel == "chromium"
+
+    def test_channel_env_override_chrome(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """XCLI_CHANNEL=chrome should set channel to 'chrome'."""
+        monkeypatch.setenv("XCLI_CHANNEL", "chrome")
+        monkeypatch.setattr(cfg_module, "_config", None)
+        config = get_config()
+        assert config.browser.channel == "chrome"
+
+    def test_channel_env_override_msedge(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """XCLI_CHANNEL=msedge should set channel to 'msedge'."""
+        monkeypatch.setenv("XCLI_CHANNEL", "msedge")
+        monkeypatch.setattr(cfg_module, "_config", None)
+        config = get_config()
+        assert config.browser.channel == "msedge"
+
+    def test_invalid_channel_raises_configuration_error(self) -> None:
+        """An unknown channel value should raise ConfigurationError."""
+        from xcli.config import BrowserConfig, ConfigurationError
+
+        config = BrowserConfig(channel="firefox")
+        with pytest.raises(ConfigurationError, match="channel"):
+            config.validate()
+
+    def test_allowed_channels_all_valid(self) -> None:
+        """All declared allowed channels should pass validation."""
+        from xcli.config import _ALLOWED_CHANNELS, BrowserConfig
+
+        for ch in _ALLOWED_CHANNELS:
+            BrowserConfig(channel=ch).validate()  # should not raise
+
+
 class TestCaching:
     def test_get_config_returns_same_instance(self) -> None:
         a = get_config()

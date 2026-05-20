@@ -21,16 +21,23 @@ _lock = asyncio.Lock()
 async def run(
     count: int,
     comments_per: int,
-    headless: bool = True,
+    headless: bool = False,
     jitter_pct: float | None = None,
+    channel: str | None = None,
 ) -> dict[str, Any]:
     """Fetch top ``count`` posts from the authenticated user's home feed.
 
     Args:
         count:        Number of posts to return (ads excluded).
         comments_per: Number of top reply comments to fetch per post.
-        headless:     Whether to run the browser in headless mode.
+        headless:     Whether to run the browser in headless mode.  Defaults to
+                      ``False`` (visible) for best stealth: visible mode avoids
+                      the HeadlessChrome UA tell, the WebGL OffScreen renderer
+                      tell, and the Plugins Length 0 tell.  Use ``True`` only
+                      when running in CI/Docker without a display.
         jitter_pct:   Fractional jitter on nav delays (None → use config default).
+        channel:      Browser channel override (e.g. ``"chrome"`` for installed
+                      Chrome — strongest stealth posture).  None → use config.
 
     Returns:
         Feed dict matching plan §4.1 schema:
@@ -48,7 +55,7 @@ async def run(
         jitter_pct = get_config().browser.jitter_pct
 
     async with _lock:
-        browser = await get_or_create_browser(headless=headless)
+        browser = await get_or_create_browser(headless=headless, channel=channel)
         await ensure_authenticated()
         extractor = XExtractor(browser.page, jitter_pct=jitter_pct)
         return await extractor.fetch_feed(count, comments_per)

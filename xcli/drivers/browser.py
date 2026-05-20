@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 _browser: BrowserManager | None = None
 _headless: bool = True
+_channel: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -59,19 +60,30 @@ def set_headless(headless: bool) -> None:
     _headless = headless
 
 
-async def get_or_create_browser(headless: bool | None = None) -> BrowserManager:
+async def get_or_create_browser(
+    headless: bool | None = None,
+    channel: str | None = None,
+) -> BrowserManager:
     """Return the existing singleton browser or create a new authenticated one.
 
     Args:
         headless: Override headless mode.  None → use current module-level flag.
+        channel:  Browser channel override (e.g. ``"chrome"``).  None → pull
+                  from config (``XCLI_CHANNEL`` env / default ``"chromium"``).
+                  Passing ``"chrome"`` uses the user's installed Chrome, which
+                  has real plugins, GPU WebGL, and a non-Headless UA — the
+                  strongest stealth posture.
 
     Raises:
         AuthenticationError: If no valid source profile / cookies exist.
     """
-    global _browser, _headless
+    global _browser, _headless, _channel
 
     if headless is not None:
         _headless = headless
+
+    if channel is not None:
+        _channel = channel
 
     if _browser is not None:
         return _browser
@@ -90,12 +102,18 @@ async def get_or_create_browser(headless: bool | None = None) -> BrowserManager:
     if config.browser.chrome_path:
         launch_options["executable_path"] = config.browser.chrome_path
 
+    # Resolve effective channel: CLI arg > module-level _channel > config default
+    effective_channel = _channel if _channel is not None else config.browser.channel
+    # Normalise: treat "chromium" as None so we omit the param (use bundled Patchright default)
+    browser_channel: str | None = effective_channel if effective_channel != "chromium" else None
+
     browser = BrowserManager(
         user_data_dir=source_profile_dir,
         headless=_headless,
         slow_mo=config.browser.slow_mo,
         user_agent=config.browser.user_agent,
         viewport=viewport,
+        channel=browser_channel,
         **launch_options,
     )
     try:
@@ -167,6 +185,7 @@ async def validate_session() -> bool:
 
 def reset_browser_for_testing() -> None:
     """Reset global browser state for test isolation."""
-    global _browser, _headless
+    global _browser, _headless, _channel
     _browser = None
     _headless = True
+    _channel = None

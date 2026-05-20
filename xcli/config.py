@@ -30,6 +30,11 @@ class ConfigurationError(Exception):
     """Raised when configuration validation fails."""
 
 
+_ALLOWED_CHANNELS: frozenset[str] = frozenset(
+    {"chromium", "chrome", "chrome-beta", "chrome-dev", "msedge"}
+)
+
+
 @dataclass
 class BrowserConfig:
     """Browser-related settings."""
@@ -43,6 +48,13 @@ class BrowserConfig:
     chrome_path: str | None = None
     user_data_dir: str = "~/.xcli/profile"
     jitter_pct: float = 0.2  # fractional jitter applied to nav delays (0.0 = off, 1.0 = ±100%)
+    channel: str = "chromium"
+    # Allowed: "chromium" (bundled Patchright default), "chrome", "chrome-beta",
+    # "chrome-dev", "msedge".  Using "chrome" or similar routes through the
+    # user's installed browser, which has real plugins and real WebGL via GPU —
+    # eliminating the three top headless tells (HeadlessChrome UA, WebGL
+    # OffScreen renderer, Plugins Length 0).  CLI precedence: --channel >
+    # XCLI_CHANNEL env var > this default.
 
     def validate(self) -> None:
         """Validate browser configuration values."""
@@ -60,6 +72,10 @@ class BrowserConfig:
         if not (0.0 <= self.jitter_pct <= 1.0):
             raise ConfigurationError(
                 f"jitter_pct must be between 0.0 and 1.0, got {self.jitter_pct}"
+            )
+        if self.channel not in _ALLOWED_CHANNELS:
+            raise ConfigurationError(
+                f"channel must be one of {sorted(_ALLOWED_CHANNELS)}, got '{self.channel}'"
             )
         if self.chrome_path:
             chrome = Path(self.chrome_path)
@@ -157,3 +173,6 @@ def _apply_env(config: AppConfig) -> None:
             config.browser.jitter_pct = float(v)
         except ValueError:
             raise ConfigurationError(f"XCLI_JITTER_PCT must be a float, got '{v}'")
+
+    if v := os.environ.get("XCLI_CHANNEL"):
+        config.browser.channel = v.strip()

@@ -58,6 +58,20 @@ class BrowserManager:
     cookies, localStorage, and session state are retained in ``user_data_dir``
     between runs.
 
+    **Stealth note on ``channel``:**
+    The bundled Patchright Chromium (``channel=None``) runs headless by default
+    and exhibits three well-known tells even in new-headless mode:
+      - UA contains ``HeadlessChrome/...``
+      - WebGL vendor/renderer reports ``"Canvas has no webgl context"`` (no GPU)
+      - Plugins length is 0
+
+    Passing ``channel="chrome"`` routes through the user's installed Google
+    Chrome, which has real plugins, GPU-accelerated WebGL, and a non-Headless
+    UA — eliminating all three tells even when ``headless=True`` (new-headless
+    mode).  The ``channel`` and ``executable_path`` options are mutually
+    exclusive in Playwright; if both are provided here, ``channel`` takes
+    precedence and a warning is logged.
+
     Usage::
 
         async with BrowserManager(user_data_dir="~/.xcli/profile") as bm:
@@ -71,6 +85,7 @@ class BrowserManager:
         slow_mo: int = 0,
         viewport: dict[str, int] | None = None,
         user_agent: str | None = None,
+        channel: str | None = None,
         **launch_options: Any,
     ):
         self.user_data_dir = str(Path(user_data_dir).expanduser())
@@ -78,6 +93,7 @@ class BrowserManager:
         self.slow_mo = slow_mo
         self.viewport = viewport or {"width": 1280, "height": 720}
         self.user_agent = user_agent
+        self.channel = channel  # None → bundled Chromium; "chrome" → installed Chrome
         self.launch_options = launch_options
 
         self._playwright: Playwright | None = None
@@ -112,6 +128,22 @@ class BrowserManager:
 
             if self.user_agent:
                 context_options["user_agent"] = self.user_agent
+
+            # Resolve channel vs executable_path conflict.
+            # channel="chrome" (installed Chrome) and executable_path are
+            # mutually exclusive in Playwright.  channel takes precedence.
+            if self.channel is not None and self.channel != "chromium":
+                if "executable_path" in context_options:
+                    logger.warning(
+                        "Both channel=%r and executable_path are set — "
+                        "channel takes precedence; executable_path is ignored.",
+                        self.channel,
+                    )
+                    context_options.pop("executable_path")
+                context_options["channel"] = self.channel
+                logger.info("Using browser channel: %s", self.channel)
+            # When channel is None or "chromium", omit channel param entirely
+            # so Patchright uses its bundled Chromium (the default).
 
             # IMPORTANT: launch_persistent_context, never chromium.launch()
             # Patchright handles anti-detection patches — do NOT pass any

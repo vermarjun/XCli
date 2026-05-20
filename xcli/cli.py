@@ -229,7 +229,24 @@ def feed(
     count: int = typer.Option(10, "--count", "-n", min=1, max=100),
     comments_per: int = typer.Option(3, "--comments-per", "-y", min=0, max=50),
     output: Path | None = typer.Option(None, "--output", "-o"),
-    no_headless: bool = typer.Option(False, "--no-headless"),
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help=(
+            "Run browser headless (default: visible). "
+            "Visible mode has better stealth: no HeadlessChrome UA, real WebGL, real plugins. "
+            "Use --headless only when running in CI/Docker without a display."
+        ),
+    ),
+    channel: str | None = typer.Option(
+        None,
+        "--channel",
+        help=(
+            "Browser channel: chromium (default, bundled), "
+            "chrome (installed Chrome — better stealth), "
+            "chrome-beta, chrome-dev, msedge."
+        ),
+    ),
     jitter_pct: float | None = typer.Option(
         None,
         "--jitter-pct",
@@ -240,6 +257,10 @@ def feed(
 ) -> None:
     """Fetch top N posts from your home feed with top Y comments each.
 
+    Runs with a visible browser by default for best stealth (avoids HeadlessChrome
+    UA, WebGL OffScreen renderer, and Plugins Length 0 tells). Use ``--headless``
+    only in CI/Docker environments without a display.
+
     Requires an authenticated session. Run ``xcli login`` first if needed.
 
     Output is JSON (stdout) unless ``--output`` is specified.
@@ -247,7 +268,7 @@ def feed(
     """
     _setup_logging()
     try:
-        result = asyncio.run(_feed_cmd(count, comments_per, not no_headless, jitter_pct))
+        result = asyncio.run(_feed_cmd(count, comments_per, headless, jitter_pct, channel))
         payload = json.dumps(result, indent=2, ensure_ascii=False)
         if output:
             output.write_text(payload + "\n", encoding="utf-8")
@@ -272,11 +293,15 @@ def feed(
 
 
 async def _feed_cmd(
-    count: int, comments_per: int, headless: bool, jitter_pct: float | None = None
+    count: int,
+    comments_per: int,
+    headless: bool,
+    jitter_pct: float | None = None,
+    channel: str | None = None,
 ) -> dict:
     from xcli.tools.feed import run
 
-    return await run(count, comments_per, headless=headless, jitter_pct=jitter_pct)
+    return await run(count, comments_per, headless=headless, jitter_pct=jitter_pct, channel=channel)
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +315,24 @@ def profile(
     posts: int = typer.Option(10, "--posts", "-n", min=1, max=100),
     comments_per: int = typer.Option(3, "--comments-per", "-y", min=0, max=50),
     output: Path | None = typer.Option(None, "--output", "-o"),
-    no_headless: bool = typer.Option(False, "--no-headless"),
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help=(
+            "Run browser headless (default: visible). "
+            "Visible mode has better stealth: no HeadlessChrome UA, real WebGL, real plugins. "
+            "Use --headless only when running in CI/Docker without a display."
+        ),
+    ),
+    channel: str | None = typer.Option(
+        None,
+        "--channel",
+        help=(
+            "Browser channel: chromium (default, bundled), "
+            "chrome (installed Chrome — better stealth), "
+            "chrome-beta, chrome-dev, msedge."
+        ),
+    ),
     jitter_pct: float | None = typer.Option(
         None,
         "--jitter-pct",
@@ -301,6 +343,10 @@ def profile(
 ) -> None:
     """Deep-research a user's profile + their top N posts + Y comments each.
 
+    Runs with a visible browser by default for best stealth (avoids HeadlessChrome
+    UA, WebGL OffScreen renderer, and Plugins Length 0 tells). Use ``--headless``
+    only in CI/Docker environments without a display.
+
     Requires an authenticated session. Run ``xcli login`` first if needed.
 
     Output is JSON (stdout) unless ``--output`` is specified.
@@ -309,7 +355,7 @@ def profile(
     _setup_logging()
     try:
         result = asyncio.run(
-            _profile_cmd(username, posts, comments_per, not no_headless, jitter_pct)
+            _profile_cmd(username, posts, comments_per, headless, jitter_pct, channel)
         )
         payload = json.dumps(result, indent=2, ensure_ascii=False)
         if output:
@@ -352,10 +398,13 @@ async def _profile_cmd(
     comments_per: int,
     headless: bool,
     jitter_pct: float | None = None,
+    channel: str | None = None,
 ) -> dict:
     from xcli.tools.profile import run
 
-    return await run(username, posts, comments_per, headless=headless, jitter_pct=jitter_pct)
+    return await run(
+        username, posts, comments_per, headless=headless, jitter_pct=jitter_pct, channel=channel
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +416,15 @@ async def _profile_cmd(
 def doctor(
     skip_x: bool = typer.Option(False, "--skip-x", help="Skip the x.com reachability check."),
     json_output: bool = typer.Option(False, "--json", help="Write JSON summary to stdout."),
+    channel: str | None = typer.Option(
+        None,
+        "--channel",
+        help=(
+            "Browser channel: chromium (default, bundled), "
+            "chrome (installed Chrome — better stealth), "
+            "chrome-beta, chrome-dev, msedge."
+        ),
+    ),
 ) -> None:
     """Run stealth fingerprint checks and print a PASS/FAIL report.
 
@@ -379,7 +437,7 @@ def doctor(
     JSON output (--json) goes to stdout; the human-readable table goes to stderr.
     """
     try:
-        results = asyncio.run(_doctor_cmd(skip_x=skip_x))
+        results = asyncio.run(_doctor_cmd(skip_x=skip_x, channel=channel))
     except Exception as e:
         console.print(f"[red]doctor failed:[/red] {e}")
         raise typer.Exit(code=1) from e
@@ -395,10 +453,10 @@ def doctor(
         raise typer.Exit(code=1)
 
 
-async def _doctor_cmd(*, skip_x: bool) -> list:
+async def _doctor_cmd(*, skip_x: bool, channel: str | None = None) -> list:
     from xcli.checks import run_all_checks
 
-    return await run_all_checks(include_x_home=not skip_x)
+    return await run_all_checks(include_x_home=not skip_x, channel=channel)
 
 
 def _render_doctor_table(results: list) -> None:

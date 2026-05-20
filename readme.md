@@ -40,6 +40,7 @@ xcli login
 xcli status
 
 # 5. Pull your home feed (20 posts, JSON to stdout)
+#    A visible browser window opens by default — this is intentional (see stealth notes below).
 xcli feed --count 20 | jq .
 
 # 6. Scrape a profile
@@ -52,12 +53,12 @@ xcli profile @TwitterDev | jq .
 
 | Command | Key options | Description |
 |---|---|---|
-| `xcli login` | `--headless/--no-headless` | Interactive login via Chromium |
+| `xcli login` | — | Interactive login via Chromium (always headful) |
 | `xcli logout` | — | Clear stored session cookies |
 | `xcli status` | — | Check whether the current session is valid |
-| `xcli feed` | `--count N`, `--comments-per-post N`, `--jitter-pct F`, `--output FILE` | Scrape home timeline |
-| `xcli profile` | `@handle`, `--posts N`, `--jitter-pct F`, `--output FILE` | Scrape a user profile |
-| `xcli doctor` | `--json` | Run bot-detection sanity checks |
+| `xcli feed` | `--count N`, `--comments-per N`, `--headless`, `--channel CHAN`, `--jitter-pct F`, `--output FILE` | Scrape home timeline (headful by default) |
+| `xcli profile` | `@handle`, `--posts N`, `--headless`, `--channel CHAN`, `--jitter-pct F`, `--output FILE` | Scrape a user profile (headful by default) |
+| `xcli doctor` | `--json`, `--channel CHAN` | Run bot-detection sanity checks |
 
 ---
 
@@ -136,6 +137,28 @@ xcli profile @TwitterDev | jq .
 7. **Modal dismissal** — automatically closes cookie-consent and sign-up prompts before extracting.
 8. **Rate-limit detection** — aborts with exit code 5 rather than hammering X on a soft-block.
 
+### Headful by default for feed and profile
+
+`xcli feed` and `xcli profile` open a **visible** browser window by default. This is intentional.
+Headless Chromium has three well-known bot tells that X can detect:
+
+- **HeadlessChrome UA** — the User-Agent string contains `HeadlessChrome/...` instead of `Chrome/...`.
+- **WebGL OffScreen renderer** — headless mode reports `"Canvas has no webgl context"` (no GPU), a
+  clear fingerprint tell on sites like bot.sannysoft.com.
+- **Plugins Length 0** — headless Chromium ships with no browser plugins; real Chrome has several.
+
+Running headful (`headless=False`, the default) avoids all three tells. Use `--headless` only in
+CI/Docker environments without a display.
+
+For the **strongest stealth posture**, pair with `--channel chrome` to use your locally installed
+Google Chrome instead of the bundled Patchright Chromium. Installed Chrome has real GPU-accelerated
+WebGL, real browser plugins, and a standard (non-headless) UA even in new-headless mode:
+
+```bash
+xcli feed --count 20 --channel chrome | jq .
+xcli profile elonmusk --posts 10 --channel chrome | jq .
+```
+
 ---
 
 ## Configuration
@@ -145,6 +168,7 @@ All settings can be overridden via environment variables (or a `.env` file in th
 | Variable | Default | Description |
 |---|---|---|
 | `XCLI_HEADLESS` | `true` | Run Chromium headless (`false` for visible window) |
+| `XCLI_CHANNEL` | `chromium` | Browser channel: `chromium` (bundled), `chrome` (installed — best stealth), `chrome-beta`, `chrome-dev`, `msedge`. CLI `--channel` takes precedence. |
 | `XCLI_PROFILE_DIR` | `~/.xcli/profile` | Path to the persistent Chromium profile |
 | `XCLI_JITTER_PCT` | `0.20` | Fractional jitter on nav delays (0.0 = off, 1.0 = ±100%) |
 | `XCLI_LOG_LEVEL` | `WARNING` | Python logging level |

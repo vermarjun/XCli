@@ -284,7 +284,7 @@ class TestFeedCommand:
         feed_result = _make_feed_result(1)
         captured: list[dict] = []
 
-        async def _mock_feed(count, comments_per, headless, jitter_pct=None):
+        async def _mock_feed(count, comments_per, headless, jitter_pct=None, channel=None):
             captured.append({"jitter_pct": jitter_pct})
             return feed_result
 
@@ -294,6 +294,61 @@ class TestFeedCommand:
             )
         assert result.exit_code == 0
         assert captured[0]["jitter_pct"] == pytest.approx(0.3)
+
+    def test_feed_help_shows_headless_flag(self):
+        """--help for feed should show --headless (not --no-headless)."""
+        result = runner.invoke(app, ["feed", "--help"])
+        assert result.exit_code == 0
+        assert "--headless" in result.output
+        assert "--no-headless" not in result.output
+
+    def test_feed_help_shows_channel_flag(self):
+        """--help for feed should show --channel."""
+        result = runner.invoke(app, ["feed", "--help"])
+        assert result.exit_code == 0
+        assert "--channel" in result.output
+
+    def test_feed_headless_flag_passes_true(self):
+        """--headless flag should pass headless=True to _feed_cmd."""
+        feed_result = _make_feed_result(1)
+        captured: list[dict] = []
+
+        async def _mock_feed(count, comments_per, headless, jitter_pct=None, channel=None):
+            captured.append({"headless": headless})
+            return feed_result
+
+        with patch("xcli.cli._feed_cmd", new=_mock_feed):
+            result = runner.invoke(app, ["feed", "--count", "1", "--headless"])
+        assert result.exit_code == 0
+        assert captured[0]["headless"] is True
+
+    def test_feed_default_is_headful(self):
+        """Without --headless, feed should pass headless=False (visible default)."""
+        feed_result = _make_feed_result(1)
+        captured: list[dict] = []
+
+        async def _mock_feed(count, comments_per, headless, jitter_pct=None, channel=None):
+            captured.append({"headless": headless})
+            return feed_result
+
+        with patch("xcli.cli._feed_cmd", new=_mock_feed):
+            result = runner.invoke(app, ["feed", "--count", "1"])
+        assert result.exit_code == 0
+        assert captured[0]["headless"] is False
+
+    def test_feed_channel_option_passed_through(self):
+        """--channel option should be forwarded to _feed_cmd."""
+        feed_result = _make_feed_result(1)
+        captured: list[dict] = []
+
+        async def _mock_feed(count, comments_per, headless, jitter_pct=None, channel=None):
+            captured.append({"channel": channel})
+            return feed_result
+
+        with patch("xcli.cli._feed_cmd", new=_mock_feed):
+            result = runner.invoke(app, ["feed", "--count", "1", "--channel", "chrome"])
+        assert result.exit_code == 0
+        assert captured[0]["channel"] == "chrome"
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +445,9 @@ class TestProfileCommand:
         profile_result = _make_profile_result("testuser")
         captured: list[dict] = []
 
-        async def _mock_profile(username, posts, comments_per, headless, jitter_pct=None):
+        async def _mock_profile(
+            username, posts, comments_per, headless, jitter_pct=None, channel=None
+        ):
             captured.append({"jitter_pct": jitter_pct})
             return profile_result
 
@@ -410,6 +467,35 @@ class TestProfileCommand:
             )
         assert result.exit_code == 0
         assert captured[0]["jitter_pct"] == pytest.approx(0.5)
+
+    def test_profile_help_shows_headless_flag(self):
+        """--help for profile should show --headless (not --no-headless)."""
+        result = runner.invoke(app, ["profile", "--help"])
+        assert result.exit_code == 0
+        assert "--headless" in result.output
+        assert "--no-headless" not in result.output
+
+    def test_profile_help_shows_channel_flag(self):
+        """--help for profile should show --channel."""
+        result = runner.invoke(app, ["profile", "--help"])
+        assert result.exit_code == 0
+        assert "--channel" in result.output
+
+    def test_profile_default_is_headful(self):
+        """Without --headless, profile should pass headless=False (visible default)."""
+        profile_result = _make_profile_result("testuser")
+        captured: list[dict] = []
+
+        async def _mock_profile(
+            username, posts, comments_per, headless, jitter_pct=None, channel=None
+        ):
+            captured.append({"headless": headless})
+            return profile_result
+
+        with patch("xcli.cli._profile_cmd", new=_mock_profile):
+            result = runner.invoke(app, ["profile", "testuser", "--posts", "1"])
+        assert result.exit_code == 0
+        assert captured[0]["headless"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -470,3 +556,16 @@ class TestDoctorCommand:
         data = json.loads(result.output)
         assert isinstance(data, list)
         assert data[0]["name"] == "WebDriver (New)"
+
+    def test_doctor_help_shows_channel_flag(self):
+        """--help for doctor should show --channel."""
+        result = runner.invoke(app, ["doctor", "--help"])
+        assert result.exit_code == 0
+        assert "--channel" in result.output
+
+    def test_status_help_no_headless_no_channel(self):
+        """status --help should NOT show --headless or --channel (utility command)."""
+        result = runner.invoke(app, ["status", "--help"])
+        assert result.exit_code == 0
+        assert "--headless" not in result.output
+        assert "--channel" not in result.output

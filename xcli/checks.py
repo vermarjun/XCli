@@ -493,6 +493,7 @@ async def run_all_checks(
     *,
     include_x_home: bool = True,
     timeout_ms: int = 30_000,
+    channel: str | None = None,
 ) -> list[CheckResult]:
     """Run all stealth checks in sequence (NEVER concurrently).
 
@@ -504,17 +505,28 @@ async def run_all_checks(
         include_x_home: If False, skip the x.com/home reachability check.
         timeout_ms: Per-page timeout in milliseconds (currently used as a
                     reference; individual checks pass it to goto).
+        channel:    Browser channel to use (e.g. ``"chrome"``).  None → use
+                    config default (``XCLI_CHANNEL`` env or ``"chromium"``).
 
     Returns:
         Flat list of CheckResult objects (all groups concatenated).
     """
+    from xcli.config import get_config
     from xcli.core.browser import BrowserManager
     from xcli.session_state import get_source_profile_dir
 
     all_results: list[CheckResult] = []
     profile_dir = get_source_profile_dir()
 
-    async with BrowserManager(user_data_dir=profile_dir, headless=True) as bm:
+    # Resolve effective channel
+    effective_channel = channel
+    if effective_channel is None:
+        effective_channel = get_config().browser.channel
+    browser_channel: str | None = effective_channel if effective_channel != "chromium" else None
+
+    async with BrowserManager(
+        user_data_dir=profile_dir, headless=True, channel=browser_channel
+    ) as bm:
         page = bm.page
 
         # Group A: bot.sannysoft.com fingerprint table
